@@ -1,0 +1,34 @@
+mafft sample > x
+diff x sample.fftns2 || exit
+
+mafft --maxiterate 100  sample > x
+diff x sample.fftnsi || exit
+
+mafft --dpparttree sample > x
+diff x sample.dpparttree || exit
+
+mafft --globalpair sample > x
+diff x sample.gins1 || exit
+
+mafft --globalpair --maxiterate 100 sample > x
+diff x sample.ginsi || exit
+
+mafft --allowshift --globalpair --maxiterate 100 sample > x
+diff x sample.ginsi.allowshift || exit
+
+mafft --localpair sample > x
+diff x sample.lins1 || exit
+
+mafft --localpair --maxiterate 100 sample > x
+diff x sample.linsi || exit
+
+mafft --parttree sample > x
+diff x sample.parttree || exit
+
+mafft-qinsi samplerna > x
+diff x samplerna.qinsi || exit
+
+mafft-xinsi samplerna > x
+diff x samplerna.xinsi || exit
+
+rm x

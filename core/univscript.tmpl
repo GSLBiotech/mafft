@@ -1,0 +1,37 @@
+progs="_PROGS"
+for prog in $progs; do
+	printf  $prog" "
+done
+
+make clean
+make CC="$HOME/soft/gcc/usr/local/bin/gcc" CFLAGS="-O3 -m32 -mmacosx-version-min=10.5 -isysroot/Developer/SDKs/MacOSX10.5.sdk -DMACOSX_DEPLOYMENT_TARGET=10.5 -static-libgcc" LIBS="-lm  -lpthread -lgcc_eh" ENABLE_MULTITHREAD="-Denablemultithread"
+for prog in $progs; do
+	mv $prog $prog.intel32
+done
+
+make clean
+make CC="$HOME/soft/gcc/usr/local/bin/gcc" CFLAGS="-O3 -m64 -mmacosx-version-min=10.5 -isysroot/Developer/SDKs/MacOSX10.5.sdk -DMACOSX_DEPLOYMENT_TARGET=10.5 -static-libgcc" LIBS="-lm  -lpthread -lgcc_eh" ENABLE_MULTITHREAD="-Denablemultithread"
+for prog in $progs; do
+	mv $prog $prog.intel64
+done
+
+#make clean
+#make CC="gcc-4.0" CFLAGS="-arch ppc64 -m64 -O3 -mmacosx-version-min=10.5 -isysroot/Developer/SDKs/MacOSX10.5.sdk -DMACOSX_DEPLOYMENT_TARGET=10.5" ENABLE_MULTITHREAD=""
+#for prog in $progs; do
+#	mv $prog $prog.ppc64
+#done
+#
+#make clean
+#make CC="gcc-4.0" CFLAGS="-arch ppc -m32 -O3 -mmacosx-version-min=10.5 -isysroot/Developer/SDKs/MacOSX10.5.sdk -DMACOSX_DEPLOYMENT_TARGET=10.5" ENABLE_MULTITHREAD=""
+#for prog in $progs; do
+#	mv $prog $prog.ppc32
+#done
+
+
+set $progs
+for prog in $progs; do
+#	lipo -create $prog.icc $prog.ppc32 $prog.ppc64 -output $prog
+#	lipo -create $prog.intel64 $prog.intel32 $prog.ppc32 $prog.ppc64 -output $prog
+	lipo -create $prog.intel64 $prog.intel32 -output $prog
+	cp $prog ../binaries
+done
