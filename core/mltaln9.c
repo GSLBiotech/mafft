@@ -4425,7 +4425,9 @@ typedef struct _calcnearestthread_arg
 	double *selfscore;
 	double *mindists;
 	int *neighbors;
+#ifdef enablemultithread
 	pthread_mutex_t *mutex;
+#endif
 } calcnearestthread_arg_t;
 
 
@@ -4440,7 +4442,9 @@ static void *calcnearestthread( void *arg )
 	double *selfscore = targ->selfscore;
 	double *mindists = targ->mindists;
 	int *neighbors = targ->neighbors;
+#ifdef enablemultithread
 	pthread_mutex_t *mutex = targ->mutex;
+#endif  
 	int pos;
 	double tmpdist, mindist;
 	int progress;
@@ -4452,14 +4456,18 @@ static void *calcnearestthread( void *arg )
 
 	while( 1 ) 
 	{
+#ifdef enablemultithread
 		pthread_mutex_lock( mutex );
+#endif
 #if TREE7325
 		if( *posshared > nlim )
 #else
 		if( *posshared < 1 ) // ? 2017/Apr/26
 #endif
 		{
+#ifdef enablemultithread
 			pthread_mutex_unlock( mutex );
+#endif
 //			reporterr( "freeing tmpseq1\n" );
 			if( commonIP ) FreeIntMtx( commonIP );
 			commonIP = NULL;
@@ -4476,8 +4484,9 @@ static void *calcnearestthread( void *arg )
 #else
 		*posshared -= 1;
 #endif
+#ifdef enablemultithread
 		pthread_mutex_unlock( mutex );
-
+#endif
 		if( (nlim-pos) % 100 == 0 ) 
 		{
 			//progress = ( (unsigned long long)pos * (unsigned long long)nlim - (unsigned long long)pos*((unsigned long long)pos-1.0)*0.5 ) / ( (unsigned long long)nlim * ((unsigned long long)nlim-1.0) *0.5 ) * 100;
@@ -4537,7 +4546,9 @@ typedef struct _recalcpairs4thread_arg
 	int ***topol;
 	Treedep *dep;
 	unsigned long long *done;
+#ifdef enablemultithread
 	pthread_mutex_t *mutex;
+#endif
 } recalcpairs4thread_arg_t;
 
 static void *recalcpairs4thread( void *arg )// no TLS
@@ -4556,8 +4567,9 @@ static void *recalcpairs4thread( void *arg )// no TLS
 	int alloclen = targ->alloclen;
 	double *selfscore = targ->selfscore;;
 	unsigned long long *done = targ->done;
+#ifdef enablemultithread
 	pthread_mutex_t *mutex = targ->mutex;
-
+#endif
 	int i, j, m0, m1, m00, m11, n, step, istart, iend, n1, n0, subid;
 	int prevn;
 	char *tmpseq1, *tmpseq2;
@@ -4606,11 +4618,15 @@ static void *recalcpairs4thread( void *arg )// no TLS
 	prevn = -1;
 	while( 1 )
 	{
+#ifdef enablemultithread
 		pthread_mutex_lock( mutex );
+#endif
 //		if( *posshared <= -1 )
 		if( *posshared >= numjob )
 		{
+#ifdef enablemultithread
 			pthread_mutex_unlock( mutex );
+#endif
 //			reporterr( "freeing tmpseq1\n" );
 			free( tmpseq1 ); tmpseq1 = NULL;
 			free( tmpseq2 ); tmpseq2 = NULL;
@@ -4636,8 +4652,9 @@ static void *recalcpairs4thread( void *arg )// no TLS
 		*posshared += 1;
 		*done += jobplan[step].npairs;
 //		reporterr( "### nodenum=%d, step=%d, npairs=%lld\n", n, step, jobplan[step].npairs ); 
+#ifdef enablemultithread
 		pthread_mutex_unlock( mutex );
-
+#endif
 		istart = jobplan[step].start;
 		iend = jobplan[step].end;
 		subid = jobplan[step].subid;
@@ -4769,8 +4786,10 @@ static void calcnearest_para( int njob, double *selfscore, char **bseq, int allo
 {
 	int i;
 	calcnearestthread_arg_t *targ;
+#ifdef enablemultithread
 	pthread_t *handle;
 	pthread_mutex_t mutex;
+#endif
 	int posshared;
 
 #if REPORTCOSTS
@@ -4785,9 +4804,10 @@ static void calcnearest_para( int njob, double *selfscore, char **bseq, int allo
 	posshared = njob-1;
 #endif
 	targ = calloc( nthread, sizeof( calcnearestthread_arg_t ) );
+#ifdef enablemultithread
 	handle = calloc( nthread, sizeof( pthread_t ) );
 	pthread_mutex_init( &mutex, NULL );
-
+#endif
 	for( i=0; i<nthread; i++ )
 	{
 		targ[i].thread_no = i;
@@ -4798,13 +4818,19 @@ static void calcnearest_para( int njob, double *selfscore, char **bseq, int allo
 		targ[i].alloclen = alloclen;
 		targ[i].neighbors = neighbors;
 		targ[i].mindists = mindists;
+#ifdef enablemultithread
 		targ[i].mutex = &mutex;
 		pthread_create( handle+i, NULL, calcnearestthread, (void *)(targ+i) );
+#else
+    calcnearestthread( (void *)(targ+i) );
+#endif
 	}
 
+#ifdef enablemultithread
 	for( i=0; i<nthread; i++ ) pthread_join( handle[i], NULL );
 	pthread_mutex_destroy( &mutex );
 	free( handle );
+#endif
 	free( targ );
 
 #if REPORTCOSTS
@@ -4825,8 +4851,10 @@ static void recalcpairs_para4( int njob, int ***topol, Treedep *dep, char **bseq
 {
 	int i;
 	recalcpairs4thread_arg_t *targ;
+#ifdef enablemultithread
 	pthread_t *handle;
 	pthread_mutex_t mutex;
+#endif
 	int possharedn, numjob;
 
 	int n, n0, n1, j, k, b, blocksize, blocksize0, i0, i1;
@@ -5085,8 +5113,10 @@ exit( 1 );
 //	possharedn = numjob-1;
 	doneull = 0;
 	targ = calloc( nthread, sizeof( recalcpairs4thread_arg_t ) );
+#ifdef enablemultithread
 	handle = calloc( nthread, sizeof( pthread_t ) );
 	pthread_mutex_init( &mutex, NULL );
+#endif
 	for( i=0; i<nthread; i++ )
 	{
 //		targ[i].thread_no = i;
@@ -5105,15 +5135,21 @@ exit( 1 );
 		targ[i].alloclen = alloclen;
 		targ[i].jobplan = jobplan;
 		targ[i].done = &doneull;
+#ifdef enablemultithread
 		targ[i].mutex = &mutex;
 		pthread_create( handle+i, NULL, recalcpairs4thread, (void *)(targ+i) );
+#else
+    recalcpairs4thread( (void *)(targ+i) );
+#endif
 	}
 
+#ifdef enablemultithread
 	for( i=0; i<nthread; i++ ) pthread_join( handle[i], NULL );
 	pthread_mutex_destroy( &mutex );
 //	pthread_mutex_destroy( &mutex0 );
 //	pthread_mutex_destroy( &mutex1 );
 	free( handle );
+#endif
 	free( targ );
 
 	free( joborder );
@@ -15286,7 +15322,9 @@ typedef struct _readloopthread_arg
 	double *eff2;
 	unsigned long long *ndone;
 	int *subidpt;
+#ifdef enablemultithread
 	pthread_mutex_t *mutex;
+#endif
 } readloopthread_arg_t;
 
 static void *readloopthread( void *arg )
@@ -15305,7 +15343,9 @@ static void *readloopthread( void *arg )
 	int *subidpt = targ->subidpt;
 	int nfiles = targ->nfiles;
 	int subid = -1;
+#ifdef enablemultithread
 	pthread_mutex_t *mutex = targ->mutex;
+#endif
 	int i, j, k1, k2, start1, start2, end1, end2;
 	double effij, effijx; 
 	char *pt1, *pt2;
@@ -15342,9 +15382,13 @@ static void *readloopthread( void *arg )
 				else
 					subid++;
 #else
+#ifdef enablemultithread
 				if( mutex ) pthread_mutex_lock( mutex );
+#endif
 				subid = (*subidpt)++;
+#ifdef enablemultithread
 				if( mutex ) pthread_mutex_unlock( mutex );
+#endif
 #endif
 
 				if( subid >= nfiles ) 
@@ -15469,9 +15513,13 @@ void fillimp_file( double **impmtx, double *imp, int clus1, int clus2, int lgth1
 //	char *fn;
 //	int subid, res;
 	void (*movefunc)(char *, char *, LocalHom *, int *, int *, int *, int * );
+#ifdef enablemultithread
 	pthread_t *handle;
+#endif
 	readloopthread_arg_t *targ;
+#ifdef enablemultithread
 	pthread_mutex_t mutex;
+#endif
 	double ***localimpmtx;
 	int nth;
 	unsigned long long *localndone;
@@ -15621,8 +15669,10 @@ void fillimp_file( double **impmtx, double *imp, int clus1, int clus2, int lgth1
 			localndone = calloc( sizeof(unsigned long long), nth );
 			localimpmtx = calloc( sizeof(double **), nth );
 			for( i=0; i<nth; i++ ) localimpmtx[i] = AllocateDoubleMtx( lgth1, lgth2 );
+#ifdef enablemultithread
 			pthread_mutex_init( &mutex, NULL );
 			handle = calloc( nth, sizeof( pthread_t ) );
+#endif
 		}
 		else
 			ndone = 0;
@@ -15643,24 +15693,32 @@ void fillimp_file( double **impmtx, double *imp, int clus1, int clus2, int lgth1
 			{
 				targ[i].ndone = localndone+i;
 				targ[i].impmtx = localimpmtx[i];
+#ifdef enablemultithread
 				targ[i].mutex = &mutex;
 				pthread_create( handle+i, NULL, readloopthread, (void *)(targ+i) );
+#else
+        readloopthread( (void *)(targ+i) );
+#endif
 			}
 			else
 			{
 				targ[i].ndone = &ndone;
 				targ[i].impmtx = impmtx;
+#ifdef enablemultithread
 				targ[i].mutex = NULL;
+#endif
 				readloopthread( targ+i );
 			}
 		}
 				
+#ifdef enablemultithread
 		if( nth > 1 ) 
 		{
 			for( j=0; j<nth; j++ ) pthread_join( handle[j], NULL );
 			pthread_mutex_destroy( &mutex );
 			free( handle );
 		}
+#endif
 		free( targ );
 
 #if REPORTCOSTS

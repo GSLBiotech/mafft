@@ -380,7 +380,7 @@ int main( int argc, char *argv[] )
 	}
 
 
-#ifndef mingw
+#if !defined(mingw) && !defined(_MSC_VER)
 	setstacksize( 200 * njob ); // topolorder() de ookime no stack wo shiyou.
 #endif
 

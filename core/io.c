@@ -5959,7 +5959,7 @@ void reporterr( const char *str, ... )
 }
 
 
-#ifndef mingw
+#if !defined(mingw) && !defined(_MSC_VER)
 void setstacksize(rlim_t kStackSize )
 {
 //	const rlim_t kStackSize = 100 * 1024 * 1024;   // min stack size = 10MB

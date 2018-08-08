@@ -7,6 +7,9 @@
 -----------------------------------------------------------------------
 
 1. COMPILE
+     To use Visual C++ compiler (Windows only):
+     % set CC=cl
+     
      % cd core
      % make clean
      % make

@@ -4,43 +4,49 @@ BINDIR = $(PREFIX)/bin
 MANDIR = $(PREFIX)/share/man/man1
 DESTDIR = 
 
-#MNO_CYGWIN = -mno-cygwin
-
-ENABLE_MULTITHREAD = -Denablemultithread
-# Comment out the above line if your compiler 
-# does not support TLS (thread-local strage).
-
-#ENABLE_ATOMIC = -Denableatomic
-# Comment out the above line if your compiler 
-# does not support "atomic_int".
-
-CC = gcc
-#CC = icc
-CFLAGS = -O3
-#CFLAGS = -O3 -fPIC
-# add -fPIC when building .so files
-
-#CC = icc
-#CFLAGS = -fast
-# if you have icc, use this.
-
-#CFLAGS =  -O0  -fPIC -pedantic -Wall -std=c99 -g -pg -DMALLOC_CHECK_=3
-#CFLAGS =  -O0  -fPIC -pedantic -Wall -std=c99 -g -pg -DMALLOC_CHECK_=3  -fprofile-arcs -ftest-coverage 
-#CFLAGS =  -O0  -fPIC -pedantic -Wall -std=c99 -g -DMALLOC_CHECK_=3 # for shark, valgrind
-#CFLAGS =  -O0  -fPIC -pedantic -Wall -std=c99 -g -DMALLOC_CHECK_=3 -lprofiler  # ?
-
-
-
-ifdef ENABLE_MULTITHREAD
-LIBS = -lm  -lpthread
+ifeq ($(CC), cl)
+	CFLAGS = /nologo /O2
+	OBJ = obj
 else
-LIBS = -lm
-endif
+	OBJ = o
+	#MNO_CYGWIN = -mno-cygwin
 
-ifdef ENABLE_ATOMIC
-STDF = -std=c11
-else
-STDF = -std=c99
+	ENABLE_MULTITHREAD = -Denablemultithread
+	# Comment out the above line if your compiler 
+	# does not support TLS (thread-local strage).
+
+	#ENABLE_ATOMIC = -Denableatomic
+	# Comment out the above line if your compiler 
+	# does not support "atomic_int".
+
+	CC = gcc
+	#CC = icc
+	CFLAGS = -O3
+	#CFLAGS = -O3 -fPIC
+	# add -fPIC when building .so files
+
+	#CC = icc
+	#CFLAGS = -fast
+	# if you have icc, use this.
+
+	#CFLAGS =  -O0  -fPIC -pedantic -Wall -std=c99 -g -pg -DMALLOC_CHECK_=3
+	#CFLAGS =  -O0  -fPIC -pedantic -Wall -std=c99 -g -pg -DMALLOC_CHECK_=3  -fprofile-arcs -ftest-coverage 
+	#CFLAGS =  -O0  -fPIC -pedantic -Wall -std=c99 -g -DMALLOC_CHECK_=3 # for shark, valgrind
+	#CFLAGS =  -O0  -fPIC -pedantic -Wall -std=c99 -g -DMALLOC_CHECK_=3 -lprofiler  # ?
+
+
+
+	ifdef ENABLE_MULTITHREAD
+	LIBS = -lm  -lpthread
+	else
+	LIBS = -lm
+	endif
+
+	ifdef ENABLE_ATOMIC
+	STDF = -std=c11
+	else
+	STDF = -std=c99
+	endif
 endif
 
 MYCFLAGS = $(MNO_CYGWIN) $(ENABLE_MULTITHREAD) $(ENABLE_ATOMIC) $(STDF) $(CFLAGS)
@@ -57,80 +63,80 @@ DYLIBS = libdisttbfast.dylib
 
 PERLPROGS = mafftash_premafft.pl seekquencer_premafft.pl
 SCRIPTS = mafft mafft-homologs.rb mafft-sparsecore.rb
-OBJSETDIRECTION = mtxutl.o io.o setdirection.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o
-OBJREPLACEU = mtxutl.o io.o replaceu.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o
-OBJRESTOREU = mtxutl.o io.o restoreu.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o
-OBJREGTABLE2SEQ = mtxutl.o io.o regtable2seq.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o
-OBJSEQ2REGTABLE = mtxutl.o io.o seq2regtable.o defs.o
-OBJCOUNTLEN = mtxutl.o io.o countlen.o defs.o
-OBJF2CL = mtxutl.o io.o f2cl.o constants.o defs.o
-OBJMCCASKILLWRAP = mtxutl.o io.o mccaskillwrap.o constants.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o
-OBJCONTRAFOLDWRAP = mtxutl.o io.o contrafoldwrap.o constants.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o
-OBJMULTI2HAT3S = mtxutl.o io.o mltaln9.o tddis.o constants.o \
-				 multi2hat3s.o defs.o fft.o fftFunctions.o Galign11.o Lalign11.o genalign11.o
-OBJPAIRASH = mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o \
-			 Falign.o MSalignmm.o Galign11.o Lalign11.o genalign11.o MSalign11.o suboptalign11.o SAalignmm.o \
-			 pairash.o defs.o fft.o fftFunctions.o
-OBJPAIRLOCALALIGN = mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o \
-		            Falign.o MSalignmm.o Galign11.o Lalign11.o genalign11.o MSalign11.o suboptalign11.o SAalignmm.o \
-					pairlocalalignmain.o pairlocalalign.o defs.o fft.o fftFunctions.o
-OBJDUMMY = mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o \
-		    Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o \
-			disttbfast_dummy.o dummy.o defs.o fft.o fftFunctions.o
-OBJSPLITFROMALN = mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o  Dalignmm.o \
-		    Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o \
-			splitfromaln.o defs.o fft.o fftFunctions.o
-OBJSPLITTBFAST = mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o  Dalignmm.o \
-		    Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o \
-			splittbfast.o defs.o fft.o fftFunctions.o 
-OBJSPLITTBFASTP = mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o \
-		    Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o \
-			defs.o fft.o fftFunctions.o
-OBJDISTTBFAST = mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o \
-		    Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o \
-			disttbfast.o defs.o fft.o fftFunctions.o addfunctions.o
-OBJMAKEDIRECTIONLIST = mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o  Dalignmm.o \
-		    Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o \
-			makedirectionlist.o defs.o fft.o fftFunctions.o addfunctions.o
-OBJTBFAST = mtxutl.o io.o mltaln9.o tddis.o constants.o MSalignmm.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o \
-		    Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o \
-			tbfast.o defs.o fft.o fftFunctions.o addfunctions.o \
-			pairlocalalign.o MSalign11.o 
-OBJNODPAIR = mtxutl.o io.o mltaln9.o tddis.o constants.o MSalignmm.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o \
-		    Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o \
-			nodepair.o defs.o fft.o fftFunctions.o addfunctions.o \
-			pairlocalalign.o MSalign11.o
-OBJADDSINGLE = mtxutl.o io.o mltaln9.o tddis.o constants.o MSalignmm.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o \
-		    Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o \
-			addsingle.o defs.o fft.o fftFunctions.o addfunctions.o
-OBJSETCORE = mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o \
-		    Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o \
-			setcore.o defs.o fft.o fftFunctions.o
-OBJTDITR = mtxutl.o io.o mltaln9.o tddis.o constants.o nj.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o  \
-		   Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o fftFunctions.o fft.o  \
-		   tditeration.o tditr.o defs.o SAalignmm.o treeOperation.o
-OBJDVTDITR = mtxutl.o io.o mltaln9.o tddis.o constants.o nj.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o \
-			Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o MSalignmm.o fftFunctions.o fft.o  \
-			tditeration.o dvtditr.o defs.o SAalignmm.o treeOperation.o addfunctions.o 
-OBJGETLAG = mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o  \
-		    Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o Dalignmm.o \
-			getlag.o defs.o fft.o fftFunctions.o
-OBJGAPFILL = mtxutl.o io.o constants.o gapfill.o defs.o
-OBJDNDFAST5 = dndfast5.o io.o constants.o mtxutl.o mltaln9.o tddis.o defs.o
-OBJDNDBLAST = dndblast.o io.o constants.o mtxutl.o mltaln9.o tddis.o defs.o Galign11.o Lalign11.o genalign11.o
-OBJDNDFAST7 = dndfast7.o io.o constants.o mtxutl.o mltaln9.o tddis.o defs.o Galign11.o Lalign11.o genalign11.o
-OBJDNDFAST6 = dndfast6.o io.o constants.o mtxutl.o mltaln9.o tddis.o defs.o
-OBJDNDFAST4 = dndfast4.o io.o constants.o mtxutl.o mltaln9.o tddis.o defs.o
-OBJDNDFAST6 = dndfast6.o io.o constants.o mtxutl.o mltaln9.o tddis.o defs.o
-OBJSEXTET5 = io.o constants.o mtxutl.o mltaln9.o tddis.o sextet5.o defs.o Galign11.o Lalign11.o genalign11.o
-OBJDISTANCE = io.o constants.o mtxutl.o mltaln9.o tddis.o mafft-distance.o defs.o Galign11.o Lalign11.o genalign11.o
-OBJTRIPLET6 = io.o constants.o mtxutl.o mltaln9.o tddis.o triplet6.o defs.o
-OBJTRIPLET5 = io.o constants.o mtxutl.o mltaln9.o tddis.o triplet5.o defs.o
-OBJOCTET4 = io.o constants.o mtxutl.o mltaln9.o tddis.o octet4.o defs.o
-OBJDNDPRE = dndpre.o io.o constants.o mtxutl.o mltaln9.o defs.o Galign11.o Lalign11.o genalign11.o
-OBJGALN = io.o mtxutl.o mltaln9.o tddis.o constants.o partSalignmm.o MSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o \
-          SAalignmm.o Galign11.o Lalign11.o genalign11.o Falign.o Falign_localhom.o fftFunctions.o fft.o mafft-profile.o defs.o
-OBJSCORE = io.o mtxutl.o mltaln9.o score.o constants.o defs.o Galign11.o Lalign11.o genalign11.o
+OBJSETDIRECTION = mtxutl.$(OBJ) io.$(OBJ) setdirection.$(OBJ) defs.$(OBJ) mltaln9.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJREPLACEU = mtxutl.$(OBJ) io.$(OBJ) replaceu.$(OBJ) defs.$(OBJ) mltaln9.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJRESTOREU = mtxutl.$(OBJ) io.$(OBJ) restoreu.$(OBJ) defs.$(OBJ) mltaln9.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJREGTABLE2SEQ = mtxutl.$(OBJ) io.$(OBJ) regtable2seq.$(OBJ) defs.$(OBJ) mltaln9.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJSEQ2REGTABLE = mtxutl.$(OBJ) io.$(OBJ) seq2regtable.$(OBJ) defs.$(OBJ)
+OBJCOUNTLEN = mtxutl.$(OBJ) io.$(OBJ) countlen.$(OBJ) defs.$(OBJ)
+OBJF2CL = mtxutl.$(OBJ) io.$(OBJ) f2cl.$(OBJ) constants.$(OBJ) defs.$(OBJ)
+OBJMCCASKILLWRAP = mtxutl.$(OBJ) io.$(OBJ) mccaskillwrap.$(OBJ) constants.$(OBJ) defs.$(OBJ) mltaln9.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJCONTRAFOLDWRAP = mtxutl.$(OBJ) io.$(OBJ) contrafoldwrap.$(OBJ) constants.$(OBJ) defs.$(OBJ) mltaln9.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJMULTI2HAT3S = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) \
+				 multi2hat3s.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJPAIRASH = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ) \
+			 Falign.$(OBJ) MSalignmm.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) MSalign11.$(OBJ) suboptalign11.$(OBJ) SAalignmm.$(OBJ) \
+			 pairash.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ)
+OBJPAIRLOCALALIGN = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ) \
+		            Falign.$(OBJ) MSalignmm.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) MSalign11.$(OBJ) suboptalign11.$(OBJ) SAalignmm.$(OBJ) \
+					pairlocalalignmain.$(OBJ) pairlocalalign.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ)
+OBJDUMMY = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ) \
+		    Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) SAalignmm.$(OBJ) MSalignmm.$(OBJ) \
+			disttbfast_dummy.$(OBJ) dummy.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ)
+OBJSPLITFROMALN = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ)  Dalignmm.$(OBJ) \
+		    Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) SAalignmm.$(OBJ) MSalignmm.$(OBJ) \
+			splitfromaln.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ)
+OBJSPLITTBFAST = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ)  Dalignmm.$(OBJ) \
+		    Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) SAalignmm.$(OBJ) MSalignmm.$(OBJ) \
+			splittbfast.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ) 
+OBJSPLITTBFASTP = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ) \
+		    Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) SAalignmm.$(OBJ) MSalignmm.$(OBJ) \
+			defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ)
+OBJDISTTBFAST = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ) \
+		    Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) SAalignmm.$(OBJ) MSalignmm.$(OBJ) \
+			disttbfast.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ) addfunctions.$(OBJ)
+OBJMAKEDIRECTIONLIST = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ)  Dalignmm.$(OBJ) \
+		    Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) SAalignmm.$(OBJ) MSalignmm.$(OBJ) \
+			makedirectionlist.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ) addfunctions.$(OBJ)
+OBJTBFAST = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) MSalignmm.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ) \
+		    Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) SAalignmm.$(OBJ) \
+			tbfast.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ) addfunctions.$(OBJ) \
+			pairlocalalign.$(OBJ) MSalign11.$(OBJ) 
+OBJNODPAIR = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) MSalignmm.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ) \
+		    Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) SAalignmm.$(OBJ) \
+			nodepair.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ) addfunctions.$(OBJ) \
+			pairlocalalign.$(OBJ) MSalign11.$(OBJ)
+OBJADDSINGLE = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) MSalignmm.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ) \
+		    Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) SAalignmm.$(OBJ) \
+			addsingle.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ) addfunctions.$(OBJ)
+OBJSETCORE = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ) \
+		    Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) SAalignmm.$(OBJ) MSalignmm.$(OBJ) \
+			setcore.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ)
+OBJTDITR = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) nj.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ)  \
+		   Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) fftFunctions.$(OBJ) fft.$(OBJ)  \
+		   tditeration.$(OBJ) tditr.$(OBJ) defs.$(OBJ) SAalignmm.$(OBJ) treeOperation.$(OBJ)
+OBJDVTDITR = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) nj.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ) \
+			Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) MSalignmm.$(OBJ) fftFunctions.$(OBJ) fft.$(OBJ)  \
+			tditeration.$(OBJ) dvtditr.$(OBJ) defs.$(OBJ) SAalignmm.$(OBJ) treeOperation.$(OBJ) addfunctions.$(OBJ) 
+OBJGETLAG = mtxutl.$(OBJ) io.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) partSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ)  \
+		    Falign.$(OBJ) Falign_localhom.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) SAalignmm.$(OBJ) MSalignmm.$(OBJ) Dalignmm.$(OBJ) \
+			getlag.$(OBJ) defs.$(OBJ) fft.$(OBJ) fftFunctions.$(OBJ)
+OBJGAPFILL = mtxutl.$(OBJ) io.$(OBJ) constants.$(OBJ) gapfill.$(OBJ) defs.$(OBJ)
+OBJDNDFAST5 = dndfast5.$(OBJ) io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) defs.$(OBJ)
+OBJDNDBLAST = dndblast.$(OBJ) io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) defs.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJDNDFAST7 = dndfast7.$(OBJ) io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) defs.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJDNDFAST6 = dndfast6.$(OBJ) io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) defs.$(OBJ)
+OBJDNDFAST4 = dndfast4.$(OBJ) io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) defs.$(OBJ)
+OBJDNDFAST6 = dndfast6.$(OBJ) io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) defs.$(OBJ)
+OBJSEXTET5 = io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) sextet5.$(OBJ) defs.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJDISTANCE = io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) mafft-distance.$(OBJ) defs.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJTRIPLET6 = io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) triplet6.$(OBJ) defs.$(OBJ)
+OBJTRIPLET5 = io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) triplet5.$(OBJ) defs.$(OBJ)
+OBJOCTET4 = io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) octet4.$(OBJ) defs.$(OBJ)
+OBJDNDPRE = dndpre.$(OBJ) io.$(OBJ) constants.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) defs.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
+OBJGALN = io.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) tddis.$(OBJ) constants.$(OBJ) partSalignmm.$(OBJ) MSalignmm.$(OBJ) Lalignmm.$(OBJ) rna.$(OBJ) Salignmm.$(OBJ) Dalignmm.$(OBJ) \
+          SAalignmm.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ) Falign.$(OBJ) Falign_localhom.$(OBJ) fftFunctions.$(OBJ) fft.$(OBJ) mafft-profile.$(OBJ) defs.$(OBJ)
+OBJSCORE = io.$(OBJ) mtxutl.$(OBJ) mltaln9.$(OBJ) score.$(OBJ) constants.$(OBJ) defs.$(OBJ) Galign11.$(OBJ) Lalign11.$(OBJ) genalign11.$(OBJ)
 
 HEADER = mltaln.h mtxutl.h mafft.h
 FFTHEADER = fft.h
@@ -325,219 +331,219 @@ mafftash_premafft.pl : mafftash_premafft.tmpl
 seekquencer_premafft.pl : seekquencer_premafft.tmpl
 	cp seekquencer_premafft.tmpl seekquencer_premafft.pl
 
-gapfill.o : gapfill.c $(HEADER)
+gapfill.$(OBJ) : gapfill.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c gapfill.c
 
-mltaln9.o : mltaln9.c $(HEADER)
+mltaln9.$(OBJ) : mltaln9.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c mltaln9.c
 
-tddis.o : tddis.c $(HEADER)
+tddis.$(OBJ) : tddis.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c tddis.c
 
-constants.o : constants.c miyata.h miyata5.h blosum.c DNA.h JTT.c $(HEADER)
+constants.$(OBJ) : constants.c miyata.h miyata5.h blosum.c DNA.h JTT.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c constants.c
 
-defs.o : defs.c 
+defs.$(OBJ) : defs.c 
 	$(CC) $(MYCFLAGS) -c defs.c
 
-#A+++alignmm.o : SA+++alignmm.c $(HEADER)
-#	$(CC) $(MYCFLAGS) -c SA+++alignmm.c -o A+++alignmm.o
+#A+++alignmm.$(OBJ) : SA+++alignmm.c $(HEADER)
+#	$(CC) $(MYCFLAGS) -c SA+++alignmm.c -o A+++alignmm.$(OBJ)
 
-Salignmm.o : Salignmm.c $(HEADER)
+Salignmm.$(OBJ) : Salignmm.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c Salignmm.c 
 
-Dalignmm.o : Dalignmm.c $(HEADER)
+Dalignmm.$(OBJ) : Dalignmm.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c Dalignmm.c 
 
-MSalignmm.o : MSalignmm.c $(HEADER)
+MSalignmm.$(OBJ) : MSalignmm.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c MSalignmm.c 
 
-partSalignmm.o : partSalignmm.c $(HEADER)
+partSalignmm.$(OBJ) : partSalignmm.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c partSalignmm.c  
 
-Lalign11.o : Lalign11.c $(HEADER)
+Lalign11.$(OBJ) : Lalign11.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c Lalign11.c 
 
-genalign11.o : genalign11.c $(HEADER)
+genalign11.$(OBJ) : genalign11.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c genalign11.c 
 
-suboptalign11.o : suboptalign11.c $(HEADER)
+suboptalign11.$(OBJ) : suboptalign11.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c suboptalign11.c 
 
-Galign11.o : Galign11.c $(HEADER)
+Galign11.$(OBJ) : Galign11.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c Galign11.c 
 
-MSalign11.o : MSalign11.c $(HEADER)
+MSalign11.$(OBJ) : MSalign11.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c MSalign11.c 
 
-SAalignmm.o : SAalignmm.c $(HEADER)
-	$(CC) $(MYCFLAGS) -c SAalignmm.c -o SAalignmm.o
+SAalignmm.$(OBJ) : SAalignmm.c $(HEADER)
+	$(CC) $(MYCFLAGS) -c SAalignmm.c -o SAalignmm.$(OBJ)
 
-Lalignmm.o : Lalignmm.c $(HEADER)
+Lalignmm.$(OBJ) : Lalignmm.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c Lalignmm.c 
 
-rna.o : rna.c $(HEADER)
+rna.$(OBJ) : rna.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c rna.c 
 
-disttbfast.o : disttbfast.c $(HEADER) $(FFTHEADER)
+disttbfast.$(OBJ) : disttbfast.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c disttbfast.c
 
-splitfromaln.o : splitfromaln.c $(HEADER) $(FFTHEADER) 
+splitfromaln.$(OBJ) : splitfromaln.c $(HEADER) $(FFTHEADER) 
 	$(CC) $(MYCFLAGS) -c splitfromaln.c
 
-splittbfast.o : splittbfast.c $(HEADER) $(FFTHEADER) 
+splittbfast.$(OBJ) : splittbfast.c $(HEADER) $(FFTHEADER) 
 	$(CC) $(MYCFLAGS) -c splittbfast.c
 
-splittbfast2.o : splittbfast2.c $(HEADER) $(FFTHEADER) 
+splittbfast2.$(OBJ) : splittbfast2.c $(HEADER) $(FFTHEADER) 
 	$(CC) $(MYCFLAGS) -c splittbfast2.c
 
-makedirectionlist.o : makedirectionlist.c $(HEADER) $(FFTHEADER) 
+makedirectionlist.$(OBJ) : makedirectionlist.c $(HEADER) $(FFTHEADER) 
 	$(CC) $(MYCFLAGS) -c makedirectionlist.c
 
-disttbfast_dummy.o : disttbfast_dummy.c $(HEADER) $(FFTHEADER)
+disttbfast_dummy.$(OBJ) : disttbfast_dummy.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c disttbfast_dummy.c
 
-dummy.o : dummy.c $(HEADER) $(FFTHEADER)
+dummy.$(OBJ) : dummy.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c dummy.c
 
-tbfast.o : tbfast.c $(HEADER) $(FFTHEADER)
+tbfast.$(OBJ) : tbfast.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c tbfast.c
 
-nodepair.o : nodepair.c $(HEADER) $(FFTHEADER)
+nodepair.$(OBJ) : nodepair.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c nodepair.c
 
-addsingle.o : addsingle.c $(HEADER) $(FFTHEADER)
-addsingle.o : addsingle.c $(HEADER) $(FFTHEADER)
+addsingle.$(OBJ) : addsingle.c $(HEADER) $(FFTHEADER)
+addsingle.$(OBJ) : addsingle.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c addsingle.c
 
-tbfast2.o : tbfast2.c $(HEADER) $(FFTHEADER)
+tbfast2.$(OBJ) : tbfast2.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c tbfast2.c
 
-setcore.o : setcore.c $(HEADER) $(FFTHEADER)
+setcore.$(OBJ) : setcore.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c setcore.c
 
-getlag.o : getlag.c $(HEADER) $(FFTHEADER)
+getlag.$(OBJ) : getlag.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c getlag.c
 
-tditr.o : tditr.c $(HEADER)
+tditr.$(OBJ) : tditr.c $(HEADER)
 	 $(CC) $(MYCFLAGS) -c tditr.c
 
-dvtditr.o : dvtditr.c $(HEADER)
+dvtditr.$(OBJ) : dvtditr.c $(HEADER)
 	 $(CC) $(MYCFLAGS) -c dvtditr.c
 
-tditeration.o : tditeration.c $(HEADER)
+tditeration.$(OBJ) : tditeration.c $(HEADER)
 	 $(CC) $(MYCFLAGS) -c tditeration.c
 
-mafft-profile.o : mafft-profile.c $(HEADER) $(MTXHEADER)
+mafft-profile.$(OBJ) : mafft-profile.c $(HEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c mafft-profile.c
 
-dndfast4.o : dndfast4.c $(HEADER) $(MTXHEADER)
+dndfast4.$(OBJ) : dndfast4.c $(HEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c dndfast4.c
 
-dndfast5.o : dndfast5.c $(HEADER) $(MTXHEADER)
+dndfast5.$(OBJ) : dndfast5.c $(HEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c dndfast5.c
 
-dndfast6.o : dndfast6.c $(HEADER) $(MTXHEADER)
+dndfast6.$(OBJ) : dndfast6.c $(HEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c dndfast6.c
 
-dndfast7.o : dndfast7.c $(HEADER) $(MTXHEADER)
+dndfast7.$(OBJ) : dndfast7.c $(HEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c dndfast7.c
 
-dndblast.o : dndblast.c $(HEADER) $(MTXHEADER)
+dndblast.$(OBJ) : dndblast.c $(HEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c dndblast.c
 
-dndfast3.o : dndfast3.c $(HEADER) $(MTXHEADER)
+dndfast3.$(OBJ) : dndfast3.c $(HEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c dndfast3.c
 
-dndpre.o : dndpre.c $(HEADER)
+dndpre.$(OBJ) : dndpre.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c dndpre.c
 
-countlen.o : countlen.c $(HEADER)
+countlen.$(OBJ) : countlen.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c countlen.c
 
-seq2regtable.o : seq2regtable.c $(HEADER)
+seq2regtable.$(OBJ) : seq2regtable.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c seq2regtable.c
 
-regtable2seq.o : regtable2seq.c $(HEADER)
+regtable2seq.$(OBJ) : regtable2seq.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c regtable2seq.c
 
-f2cl.o : f2cl.c $(HEADER)
+f2cl.$(OBJ) : f2cl.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c f2cl.c
 
-setdirection.o : setdirection.c $(HEADER)
+setdirection.$(OBJ) : setdirection.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c setdirection.c
 
-replaceu.o : replaceu.c $(HEADER)
+replaceu.$(OBJ) : replaceu.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c replaceu.c
 
-restoreu.o : restoreu.c $(HEADER)
+restoreu.$(OBJ) : restoreu.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c restoreu.c
 
-mccaskillwrap.o : mccaskillwrap.c $(HEADER)
+mccaskillwrap.$(OBJ) : mccaskillwrap.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c mccaskillwrap.c
 
-contrafoldwrap.o : contrafoldwrap.c $(HEADER)
+contrafoldwrap.$(OBJ) : contrafoldwrap.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c contrafoldwrap.c
 
-pairlocalalign.o : pairlocalalign.c $(HEADER) $(FFTHEADER)
+pairlocalalign.$(OBJ) : pairlocalalign.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c pairlocalalign.c
 
-pairlocalalignmain.o : pairlocalalignmain.c $(HEADER) $(FFTHEADER)
+pairlocalalignmain.$(OBJ) : pairlocalalignmain.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c pairlocalalignmain.c
 
-pairash.o : pairash.c $(HEADER) $(FFTHEADER)
+pairash.$(OBJ) : pairash.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c pairash.c
 
-multi2hat3s.o : multi2hat3s.c $(HEADER) $(FFTHEADER)
+multi2hat3s.$(OBJ) : multi2hat3s.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c multi2hat3s.c
 
-io.o : io.c $(HEADER) $(FFTHEADER)
+io.$(OBJ) : io.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c io.c
 
-nj.o : nj.c $(HEADER)
+nj.$(OBJ) : nj.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c nj.c
 
-treeOperation.o : treeOperation.c $(HEADER)
+treeOperation.$(OBJ) : treeOperation.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c treeOperation.c
 
-sextet5.o : sextet5.c $(HEADER) $(MTXHEADER)
+sextet5.$(OBJ) : sextet5.c $(HEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c sextet5.c
 
-mafft-distance.o : mafft-distance.c $(HEADER) $(MTXHEADER)
+mafft-distance.$(OBJ) : mafft-distance.c $(HEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c mafft-distance.c
 
-maffttext2hex.o : maffttext2hex.c
+maffttext2hex.$(OBJ) : maffttext2hex.c
 	$(CC) $(MYCFLAGS) -c maffttext2hex.c
 
-hex2maffttext.o : hex2maffttext.c
+hex2maffttext.$(OBJ) : hex2maffttext.c
 	$(CC) $(MYCFLAGS) -c hex2maffttext.c
 
-triplet6.o : triplet6.c $(HEADER) $(MTXHEADER)
+triplet6.$(OBJ) : triplet6.c $(HEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c triplet6.c
 
-fft.o : fft.c $(HEADER) $(FFTHEADER)
+fft.$(OBJ) : fft.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c fft.c 
 
-fftFunctions.o : fftFunctions.c $(HEADER) $(FFTHEADER)
+fftFunctions.$(OBJ) : fftFunctions.c $(HEADER) $(FFTHEADER)
 	$(CC) $(MYCFLAGS) -c fftFunctions.c
 
-Falign.o : Falign.c $(HEADER) $(FFTHEADER) $(MTXHEADER)
+Falign.$(OBJ) : Falign.c $(HEADER) $(FFTHEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c Falign.c
 
-Falign_localhom.o : Falign_localhom.c $(HEADER) $(FFTHEADER) $(MTXHEADER)
+Falign_localhom.$(OBJ) : Falign_localhom.c $(HEADER) $(FFTHEADER) $(MTXHEADER)
 	$(CC) $(MYCFLAGS) -c Falign_localhom.c
 
-mtxutl.o : mtxutl.c 
+mtxutl.$(OBJ) : mtxutl.c 
 	$(CC) $(MYCFLAGS) -c mtxutl.c
 
-addfunctions.o : addfunctions.c $(HEADER)
+addfunctions.$(OBJ) : addfunctions.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c addfunctions.c
 
-score.o : score.c $(HEADER)
+score.$(OBJ) : score.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c score.c
 
 clean :
-	rm -f *.o *.a *.exe *~ $(PERLPROGS) $(PROGS) $(SCRIPTS) $(SOS) $(DYLIBS) $(DLLS) *.gcda *.gcno
+	rm -f *.$(OBJ) *.a *.exe *~ $(PERLPROGS) $(PROGS) $(SCRIPTS) $(SOS) $(DYLIBS) $(DLLS) *.gcda *.gcno
 #	rm -f ../binaries/* ../scripts/*
 
 install : all

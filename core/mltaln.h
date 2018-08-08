@@ -15,7 +15,11 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include <string.h>
-#include <unistd.h>
+
+#ifndef _MSC_VER
+  #include <unistd.h>
+#endif 
+
 #include <math.h>
 #include <ctype.h>
 #include "mtxutl.h"
@@ -27,10 +31,11 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #endif
-#ifndef mingw
-#include <sys/resource.h> // for setstacksize, 2016/Jun
-#include <sys/shm.h> // shared memory
-#include <sys/mman.h> // shm_open
+
+#if !defined(mingw) && !defined(_MSC_VER)
+  #include <sys/resource.h> // for setstacksize, 2016/Jun
+  #include <sys/shm.h> // shared memory
+  #include <sys/mman.h> // shm_open
 #endif
 
 

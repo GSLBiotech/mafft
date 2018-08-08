@@ -2653,7 +2653,7 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 	}
 
 
-#ifndef mingw
+#if !defined(mingw) && !defined(_MSC_VER)
 	setstacksize( 200 * njob ); // topolorder() de ookime no stack wo shiyou.
 #endif
 
