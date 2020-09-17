@@ -60,13 +60,44 @@ char creverse( char f )
 	return( table[(int)f] );
 }
 
+static int countc( char *s, char q )
+{
+	int v = 0;
+	while( *s )
+		if( *s++ == q ) v++;
+	return( v );
+}
+
+static void ttou( char *s )
+{
+	while( *s )
+	{
+		if( *s == 't' ) *s = 'u';
+		else if( *s == 'T' ) *s = 'U';
+		s++;
+	}
+}
+
 void sreverse( char *r, char *s )
 {
+	int numt = countc( s, 't' ) + countc( s, 'T' );
+	int numu = countc( s, 'u' ) + countc( s, 'U' );
+
+//	reporterr( "numt=%d, numu=%d\n", numt, numu );
+//	reporterr( "s=%s\n", s );
+
 	r += strlen( s );
 	*r-- = 0;
 	while( *s )
 		*r-- = creverse( *s++ );
 //		*r-- = ( *s++ );
+	if( numu > numt )
+	{
+//		reporterr( "RNA!\n" );
+//		reporterr( "r before ttou =%s\n", r );
+		ttou( r+1 );
+//		reporterr( "r after ttou =%s\n", r );
+	}
 }
 
 void gappick_samestring( char *seq )
@@ -5391,7 +5422,7 @@ static void showaamtxexample()
 	exit( 1 );
 }
 
-double *loadaamtx( void )
+double *loadaamtx( int *rescalept )
 {
 	int i, j, k, ii, jj;
 	double *val;
@@ -5404,6 +5435,8 @@ double *loadaamtx( void )
 	char *ptr2;
 	char *mtxfname = "_aamtx";
 	FILE *mf;
+	char key[1000];
+
 
 	raw = AllocateDoubleMtx( 21, 20 );
 	val = AllocateDoubleVec( 420 );
@@ -5479,13 +5512,24 @@ double *loadaamtx( void )
 		if( i > 19 ) break;
 	}
 
+	*rescalept = 1;
 	for( i=0; i<20; i++ ) raw[20][i] = -1.0;
 	while( !feof( mf ) )
 	{
 		fgets( line, 999, mf );
-		if( line[0] == 'f' )
+
+		sscanf( line, "%s", key );
+		
+		if( !strcmp( key, "norescale" ) )
 		{
-//			fprintf( stderr, "line = %s\n", line );
+			reporterr( "no rescale\n" );
+			*rescalept = 0;
+			break;
+		}
+//		else if( line[0] == 'f' )
+		else if( !strcmp( key, "frequency" ) )
+		{
+//			fprintf( stderr, "found! line = %s\n", line );
 			ptr1 = line;
 			for( j=0; j<20; j++ )
 			{
@@ -6144,7 +6188,159 @@ void use_getrusage(void)
 	if (getrusage(RUSAGE_SELF, &r) != 0) {
 		/*Failure*/
 	}
-	fprintf(stderr, "maxrss = %ld MB\n", r.ru_maxrss/1000);
+	fprintf(stderr, "\nmaxrss = %ld MB\n", r.ru_maxrss/1000);
 }
 
 #endif
+
+void commongappick( int nseq, char **seq )
+{
+	int i, j, count;
+	int len = strlen( seq[0] );
+#if 1
+
+	int *mapfromnewtoold;
+
+
+	mapfromnewtoold = calloc( len+1, sizeof( int ) );
+
+	for( i=0, count=0; i<=len; i++ ) 
+	{
+		for( j=0; j<nseq; j++ )
+			if( seq[j][i] != '-' ) break;
+		if( j != nseq )
+		{
+			mapfromnewtoold[count++] = i;
+	 	}
+	}
+//	mapfromnewtoold[count] = -1; // iranai
+	for( j=0; j<nseq; j++ )
+	{
+		for( i=0; i<count; i++ )
+		{
+			seq[j][i] = seq[j][mapfromnewtoold[i]];
+		}
+	}
+	free( mapfromnewtoold );
+#else
+--------------------------
+
+	int *mapfromoldtonew;
+	int pos;
+
+	mapfromoldtonew = calloc( len+1, sizeof( int ) );
+	for( i=0; i<=len; i++ ) mapfromoldtonew[i] = -1;
+
+	for( i=0, count=0; i<=len; i++ ) 
+	{
+		for( j=0; j<nseq; j++ )
+			if( seq[j][i] != '-' ) break;
+		if( j != nseq )
+		{
+			mapfromoldtonew[i] = count;
+			count++;
+	 	}
+	}
+	for( j=0; j<nseq; j++ )
+	{
+		for( i=0; i<=len; i++ ) 
+		{
+			if( (pos=mapfromoldtonew[i]) != -1 )
+				seq[j][pos] = seq[j][i];
+		}
+	}
+	free( mapfromoldtonew );
+--------------------------
+
+	for( i=0, count=0; i<=len; i++ ) 
+	{
+	/*
+		allgap = 1;
+		for( j=0; j<nseq; j++ ) 
+			allgap *= ( seq[j][i] == '-' );
+		if( !allgap )
+	*/
+		for( j=0; j<nseq; j++ )
+			if( seq[j][i] != '-' ) break;
+		if( j != nseq )
+		{
+			for( j=0; j<nseq; j++ )
+			{
+				seq[j][count] = seq[j][i];
+			}
+			count++;
+	 	}
+	}
+
+#endif
+}
+
+void readexternalanchors( ExtAnch **extanch, int nseq, int *nogaplen )
+{
+	FILE *fp;
+	int size, lineno;
+	char buf[10000];
+	fp = fopen( "_externalanchors", "r" );
+
+	if( fp == NULL )
+	{
+		reporterr( "Cannot open _externalanchors\n" );
+		exit( 1 );
+	}
+
+	size = 0;
+	lineno = 0;
+	while( 1 )
+	{
+		lineno++;
+//		reporterr( "size = %d\n", size );
+		fgets( buf, 9999, fp );
+		if( feof( fp ) ) break;
+
+		if( buf[0] == '#' ) continue;
+
+//		reporterr( "buf=%s\n", buf );
+		*extanch = realloc( *extanch, sizeof( ExtAnch ) * (size+2) );
+		if( *extanch == NULL )
+		{
+			reporterr( "Cannot realloc *extanch\n" );
+			exit( 1 );
+		}
+
+		sscanf( buf, "%d %d %d %d %d %d %d", &(((*extanch)+size)->i), &(((*extanch)+size)->j), &(((*extanch)+size)->starti), &(((*extanch)+size)->endi), &(((*extanch)+size)->startj), &(((*extanch)+size)->endj), &(((*extanch)+size)->score) );
+//		reporterr( "i=%d, j=%d, %d-%d, %d-%d, score=%d\n", (*extanch)[size].i, (*extanch)[size].j, (*extanch)[size].starti, (*extanch)[size].endi, (*extanch)[size].startj, (*extanch)[size].endj, (*extanch)[size].score );
+
+		((*extanch)+size)->i -= 1; // 1-origin -> 0-origin
+		((*extanch)+size)->j -= 1; // 1-origin -> 0-origin
+		((*extanch)+size)->starti -= 1; 
+		((*extanch)+size)->startj -= 1;
+		((*extanch)+size)->endi -= 1;
+		((*extanch)+size)->endj -= 1;
+
+		if( (*extanch)[size].i >= nseq || (*extanch)[size].j >= nseq )
+		{
+			reporterr( "\nOut of range?  The input file has %d sequences but pair %d-%d was specified in line %d.\nNote that sequence IDs are counted from 1.\n", nseq, (*extanch)[size].i+1, (*extanch)[size].j+1, lineno );
+			exit( 1 );
+		}
+		if( (*extanch)[size].i >= (*extanch)[size].j )
+		{
+			reporterr( "\nFormat problem?  \"%d %d\" in line %d.\nThe sequence id of the first column must be less than the second.\n", (*extanch)[size].i+1, (*extanch)[size].j+1, lineno );
+			exit( 1 );
+		}
+		if( (*extanch)[size].starti > nogaplen[(*extanch)[size].i] )
+		{
+			reporterr( "\nOut of range?  len(seq%d)=%d, but anchor=%d in line %d.\nNote that position is counted from 1.\n", (*extanch)[size].i+1, nogaplen[(*extanch)[size].i], (*extanch)[size].starti+1, lineno );
+			exit( 1 );
+		}
+		if( (*extanch)[size].startj > nogaplen[(*extanch)[size].j] )
+		{
+			reporterr( "\nOut of range?  len(seq%d)=%d, but anchor=%d in line %d.\nNote that position is counted from 1.\n", (*extanch)[size].j, nogaplen[(*extanch)[size].j]+1, (*extanch)[size].startj+1, lineno );
+			exit( 1 );
+		}
+
+		size++;
+		(*extanch)[size].i = (*extanch)[size].j = -1;
+
+	}
+	fclose( fp );
+}

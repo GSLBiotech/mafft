@@ -819,6 +819,7 @@ static void createfgresult( double **gapfresult, int limk, double eff1, double e
 }
 
 static double Atracking( double *lasthorizontalw, double *lastverticalw, 
+						double fpenalty, double fpenalty_ex,
 						char **seq1, char **seq2, 
                         char **mseq1, char **mseq2, 
                         int **ijp, int icyc, int jcyc,
@@ -876,8 +877,8 @@ static double Atracking( double *lasthorizontalw, double *lastverticalw,
 	else
 	{
 #if 1
-		double fpenalty = (double)penalty;
-		double fpenalty_ex = (double)penalty_ex;
+//		double fpenalty = (double)penalty;
+//		double fpenalty_ex = (double)penalty_ex;
 		double g;
 //		reporterr( "in S, lastverticalw[lgth1-1] = %f\n", lastverticalw[lgth1-1] );
 //		reporterr( "in S, lasthorizontalw[lgth2-1] = %f\n", lasthorizontalw[lgth2-1] );
@@ -1066,7 +1067,7 @@ static double Atracking( double *lasthorizontalw, double *lastverticalw,
 	return( wm );
 }
 
-double A__align( double **n_dynamicmtx, char **seq1, char **seq2, double *eff1, double *eff2, int icyc, int jcyc, int alloclen, int constraint, double *impmatch, char *sgap1, char *sgap2, char *egap1, char *egap2, int *chudanpt, int chudanref, int *chudanres, int headgp, int tailgp, int firstmem, int calledbyfulltreebase, double **cpmxchild0, double **cpmxchild1, double ***cpmxresult, double orieff1, double orieff2 )
+double A__align( double **n_dynamicmtx, int penalty_l, int penalty_ex_l, char **seq1, char **seq2, double *eff1, double *eff2, int icyc, int jcyc, int alloclen, int constraint, double *impmatch, char *sgap1, char *sgap2, char *egap1, char *egap2, int *chudanpt, int chudanref, int *chudanres, int headgp, int tailgp, int firstmem, int calledbyfulltreebase, double **cpmxchild0, double **cpmxchild1, double ***cpmxresult, double orieff1, double orieff2 )
 /* score no keisan no sai motokaraaru gap no atukai ni mondai ga aru */
 {
 
@@ -1087,7 +1088,7 @@ double A__align( double **n_dynamicmtx, char **seq1, char **seq2, double *eff1, 
 	double *currentw, *previousw;
 //	double fpenalty = (double)penalty;
 #if USE_PENALTY_EX
-	double fpenalty_ex = (double)penalty_ex;
+	double fpenalty_ex = (double)penalty_ex_l;
 #endif
 #if 1
 	double *wtmp;
@@ -1102,9 +1103,9 @@ double A__align( double **n_dynamicmtx, char **seq1, char **seq2, double *eff1, 
 	static TLS double *match;
 	static TLS double *initverticalw;    /* kufuu sureba iranai */
 	static TLS double *lastverticalw;    /* kufuu sureba iranai */
-	static TLS char **mseq1;
-	static TLS char **mseq2;
-	static TLS char **mseq;
+	char **mseq1;
+	char **mseq2;
+	char **mseq;
 	static TLS double *ogcp1, *ogcp1o;
 	static TLS double *ogcp2, *ogcp2o;
 	static TLS double *fgcp1, *fgcp1o;
@@ -1121,7 +1122,7 @@ double A__align( double **n_dynamicmtx, char **seq1, char **seq2, double *eff1, 
 	double *gapfreq1pt;
 	static TLS double *gapfreq2;
 	double *gapfreq2pt;
-	double fpenalty = (double)penalty;
+	double fpenalty = (double)penalty_l;
 	double fpenalty_shift = (double)penalty_shift;
 	double *fgcp2pt;
 	double *ogcp2pt;
@@ -1163,8 +1164,6 @@ double A__align( double **n_dynamicmtx, char **seq1, char **seq2, double *eff1, 
 
 			imp_match_init_strict( NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 0, 0 );
 
-			free( mseq1 );
-			free( mseq2 );
 			FreeFloatVec( w1 );
 			FreeFloatVec( w2 );
 			FreeFloatVec( match );
@@ -1174,7 +1173,6 @@ double A__align( double **n_dynamicmtx, char **seq1, char **seq2, double *eff1, 
 			FreeFloatVec( m );
 			FreeIntVec( mp );
 
-			FreeCharMtx( mseq );
 
 			FreeFloatVec( ogcp1 );
 			FreeFloatVec( ogcp1o );
@@ -1278,12 +1276,10 @@ double A__align( double **n_dynamicmtx, char **seq1, char **seq2, double *eff1, 
 	fprintf( stderr, "####  strlen( seq2[0] ) = %d\n", strlen( seq2[0] ) );
 	for( i=0; i<jcyc; i++ ) fprintf( stderr, "eff2[%d] = %f\n", i, eff2[i] );
 #endif
-	if( orlgth1 == 0 )
-	{
-		mseq1 = AllocateCharMtx( njob, 0 );
-		mseq2 = AllocateCharMtx( njob, 0 );
-	}
 
+	mseq1 = AllocateCharMtx( icyc, 0 );
+	mseq2 = AllocateCharMtx( jcyc, 0 );
+	mseq = AllocateCharMtx( icyc+jcyc, lgth1+lgth2+100 );
 
 
 	if( lgth1 > orlgth1 || lgth2 > orlgth2 )
@@ -1301,8 +1297,6 @@ double A__align( double **n_dynamicmtx, char **seq1, char **seq2, double *eff1, 
 
 			FreeFloatVec( m );
 			FreeIntVec( mp );
-
-			FreeCharMtx( mseq );
 
 			FreeFloatVec( ogcp1 );
 			FreeFloatVec( ogcp1o );
@@ -1341,7 +1335,6 @@ double A__align( double **n_dynamicmtx, char **seq1, char **seq2, double *eff1, 
 		m = AllocateFloatVec( ll2+2 );
 		mp = AllocateIntVec( ll2+2 );
 
-		mseq = AllocateCharMtx( njob, ll1+ll2 );
 
 		ogcp1 = AllocateFloatVec( ll1+2 );
 		ogcp1o = AllocateFloatVec( ll1+2 );
@@ -2050,7 +2043,7 @@ fprintf( stderr, "\n" );
 	else
 	{
 //		wmo = Atracking( currentw, lastverticalw, seq1, seq2, mseq1, mseq2, ijp, icyc, jcyc, tailgp, warpis, warpjs, warpbase, &ngap1, &ngap2, reuseprofiles, eff1, eff2, cpmxresult, cpmx1pt, cpmx2pt, gapfreq1pt, gapfreq2pt, ogcp1opt, ogcp2opt, fgcp1opt, fgcp2opt, orieff1, orieff2, (cpmx1pt!=cpmx1), (cpmx2pt!=cpmx2) );
-		wmo = Atracking( currentw, lastverticalw, seq1, seq2, mseq1, mseq2, ijp, icyc, jcyc, tailgp, warpis, warpjs, warpbase, &ngap1, &ngap2, reuseprofiles, &gt1, &gt2 );
+		wmo = Atracking( currentw, lastverticalw, fpenalty, fpenalty_ex, seq1, seq2, mseq1, mseq2, ijp, icyc, jcyc, tailgp, warpis, warpjs, warpbase, &ngap1, &ngap2, reuseprofiles, &gt1, &gt2 );
 		if( !tailgp ) wm = wmo;
 	}
 
@@ -2183,6 +2176,10 @@ fprintf( stderr, "\n" );
 	previousicyc = icyc;
 	previouscall = calledbyfulltreebase;
 
+	free( mseq1 );
+	free( mseq2 );
+	FreeCharMtx( mseq );
+
 	return( wm );
 }
 
@@ -2194,7 +2191,7 @@ double A__align_gapmap( char **seq1, char **seq2, double *eff1, double *eff2, in
 }
 
 
-double A__align_variousdist( int **which, double ***matrices, double **n_dynamicmtx, char **seq1, char **seq2, double *eff1, double *eff2, double **eff1s, double **eff2s, int icyc, int jcyc, int alloclen, int constraint, double *impmatch, char *sgap1, char *sgap2, char *egap1, char *egap2, int *chudanpt, int chudanref, int *chudanres, int headgp, int tailgp )
+double A__align_variousdist( int **which, double ***matrices, double **n_dynamicmtx, int penalty_l, int penalty_ex_l, char **seq1, char **seq2, double *eff1, double *eff2, double **eff1s, double **eff2s, int icyc, int jcyc, int alloclen, int constraint, double *impmatch, char *sgap1, char *sgap2, char *egap1, char *egap2, int *chudanpt, int chudanref, int *chudanres, int headgp, int tailgp )
 /* score no keisan no sai motokaraaru gap no atukai ni mondai ga aru */
 {
 
@@ -2211,7 +2208,7 @@ double A__align_variousdist( int **which, double ***matrices, double **n_dynamic
 	double *currentw, *previousw;
 //	double fpenalty = (double)penalty;
 #if USE_PENALTY_EX
-	double fpenalty_ex = (double)penalty_ex;
+	double fpenalty_ex = (double)penalty_ex_l;
 #endif
 #if 1
 	double *wtmp;
@@ -2240,7 +2237,7 @@ double A__align_variousdist( int **which, double ***matrices, double **n_dynamic
 	static TLS int orlgth1 = 0, orlgth2 = 0;
 	static TLS double *gapfreq1;
 	static TLS double *gapfreq2;
-	double fpenalty = (double)penalty;
+	double fpenalty = (double)penalty_l;
 	double fpenalty_shift = (double)penalty_shift;
 	double *fgcp2pt;
 	double *ogcp2pt;
@@ -3041,7 +3038,7 @@ fprintf( stderr, "\n" );
 	else
 	{
 //		Atracking( currentw, lastverticalw, seq1, seq2, mseq1, mseq2, ijp, icyc, jcyc, tailgp, warpis, warpjs, warpbase, &ngap1, &ngap2, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0.0, 0.0, 1, 1 ); // NULL x 11 ha atode awaseru.
-		wmo = Atracking( currentw, lastverticalw, seq1, seq2, mseq1, mseq2, ijp, icyc, jcyc, tailgp, warpis, warpjs, warpbase, &ngap1, &ngap2, 0, NULL, NULL);
+		wmo = Atracking( currentw, lastverticalw, fpenalty, fpenalty_ex, seq1, seq2, mseq1, mseq2, ijp, icyc, jcyc, tailgp, warpis, warpjs, warpbase, &ngap1, &ngap2, 0, NULL, NULL);
 		if( !tailgp ) wm = wmo;
 	}
 

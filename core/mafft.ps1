@@ -6,6 +6,7 @@ Set-Item Env:Path "/usr/bin;$Env:Path"
 Set-Item Env:MAFFT_BINARIES "/usr/lib/mafft"
 Set-Item Env:TMPDIR "$Env:TMP"
 Set-Item Env:MAFFT_TMPDIR "$Env:TMP"
+Set-Item Env:mafft_working_dir "$PWD"
 
 #Set-Item Env:TMPDIR "/tmp"
 #Set-Item Env:MAFFT_TMPDIR "/tmp"
@@ -16,6 +17,5 @@ Set-Item Env:MAFFT_TMPDIR "$Env:TMP"
 
 #$ROOTDIR=$PSScriptRoot # not supported by powershell versions <= 2
 $ROOTDIR=Split-Path -Parent $MyInvocation.MyCommand.Path
-$ROOTDIRWBS=$ROOTDIR.Replace('\\', '\\\')
-$proc = Start-Process -Wait -NoNewWindow -PassThru -FilePath "$ROOTDIR\usr\bin\bash.exe" -ArgumentList "'$ROOTDIRWBS\usr\bin\mafft' $args"
+$proc = Start-Process -Wait -NoNewWindow -PassThru -FilePath "$ROOTDIR\usr\bin\bash.exe" -ArgumentList "'/usr/bin/mafft' $args"
 exit $proc.ExitCode

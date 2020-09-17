@@ -352,8 +352,8 @@ double G__align11( double **n_dynamicmtx, char **seq1, char **seq2, int alloclen
 
 	if( orlgth1 == 0 )
 	{
-		mseq1 = AllocateCharMtx( njob, 0 );
-		mseq2 = AllocateCharMtx( njob, 0 );
+		mseq1 = AllocateCharMtx( 2, 0 ); // 2020/Apr
+		mseq2 = AllocateCharMtx( 2, 0 ); // 2020/Apr
 	}
 
 
@@ -399,7 +399,7 @@ double G__align11( double **n_dynamicmtx, char **seq1, char **seq2, int alloclen
 		m = AllocateFloatVec( ll2+2 );
 		mp = AllocateIntVec( ll2+2 );
 
-		mseq = AllocateCharMtx( njob, ll1+ll2 );
+		mseq = AllocateCharMtx( 2, ll1+ll2 ); // 2020/Apr
 
 
 		doublework = AllocateFloatMtx( nalphabets, MAX( ll1, ll2 )+2 ); 

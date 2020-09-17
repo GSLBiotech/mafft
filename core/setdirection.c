@@ -137,6 +137,7 @@ int main( int argc, char *argv[] )
 		}
 		if( line[1] == 'R' )
 		{
+
 			directions[i] = 'R';
 			sreverse( tmpseq, seq[i] );
 			strcpy( seq[i], tmpseq );

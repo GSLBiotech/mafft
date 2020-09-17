@@ -688,8 +688,8 @@ void constants( int nseq, char **seq )
 			for( i=0; i<nalphabets; i++ ) for( j=0; j<nalphabets; j++ )
 				average += n_distmp[i][j] * freq1[i] * freq1[j];
 		}
-#if TEST
-		fprintf( stdout, "####### average2  = %f\n", average );
+#if 1
+		if( disp ) fprintf( stdout, "####### average2  = %f\n", average );
 #endif
 
 		for( i=0; i<nalphabets; i++ ) for( j=0; j<nalphabets; j++ ) 
@@ -710,8 +710,8 @@ void constants( int nseq, char **seq )
 		average = 0.0;
 		for( i=0; i<nalphabets; i++ ) 
 			average += n_distmp[i][i] * freq1[i];
-#if TEST
-		fprintf( stdout, "####### average1  = %f\n", average );
+#if 1
+		if( disp ) fprintf( stdout, "####### average1  = %f\n", average );
 #endif
 
 		if( average < 0.0 )
@@ -807,7 +807,7 @@ void constants( int nseq, char **seq )
 		double iaverage;
 //		double tmp;
 		double **n_distmp;
-		int makeaverage0;
+		int rescale = 1;
 
 
 		if( nblosum == 0 )
@@ -820,10 +820,6 @@ void constants( int nseq, char **seq )
 //			nblosum *= -1;
 //			makeaverage0 = 0;
 //		}
-		else
-		{
-			makeaverage0 = 1;
-		}
 
 		nalphabets = 26;
 		nscoredalphabets = 20;
@@ -855,7 +851,9 @@ void constants( int nseq, char **seq )
 		penaltyLN = (int)( 600.0 / 1000.0 * -2000 + 0.5);
 		penalty_exLN = (int)( 600.0 / 1000.0 * -100 + 0.5);
 
-		BLOSUMmtx( nblosum, n_distmp, freq, amino, amino_grp );
+		BLOSUMmtx( nblosum, n_distmp, freq, amino, amino_grp, &rescale );
+
+		reporterr( "rescale = %d\n", rescale );
 
 		if( trywarp ) sprintf( shiftmodel, "%4.2f", -(double)penalty_shift/600 );
 		else sprintf( shiftmodel, "noshift" );
@@ -894,26 +892,26 @@ void constants( int nseq, char **seq )
 			average = 0.0;
 		else
 		{
-			for( i=0; i<20; i++ )
 #if TEST 
+			for( i=0; i<20; i++ )
 				fprintf( stdout, "freq[%c] = %f, datafreq[%c] = %f, freq1[] = %f\n", amino[i], freq[i], amino[i], datafreq[i], freq1[i] );
 #endif
 			average = 0.0;
 			for( i=0; i<20; i++ ) for( j=0; j<20; j++ )
 				average += n_distmp[i][j] * freq1[i] * freq1[j];
 		}
-#if TEST
-		fprintf( stdout, "####### average2  = %f\n", average );
+#if 1
+		if( disp ) fprintf( stdout, "####### average2  = %f\n", average );
 #endif
 
-		if( makeaverage0 )
+		if( rescale )
 		{
 			for( i=0; i<20; i++ ) for( j=0; j<20; j++ ) 
 				n_distmp[i][j] -= average;
 		}
 #if TEST
 		fprintf( stdout, "average2 = %f\n", average );
-		fprintf( stdout, "after average substruction : \n" );
+		fprintf( stdout, "after average subtraction : \n" );
 		for( i=0; i<20; i++ )
 		{
 			for( j=0; j<20; j++ ) 
@@ -927,12 +925,20 @@ void constants( int nseq, char **seq )
 		average = 0.0;
 		for( i=0; i<20; i++ ) 
 			average += n_distmp[i][i] * freq1[i];
-#if TEST
-		fprintf( stdout, "####### average1  = %f\n", average );
+#if 1
+		if( disp ) fprintf( stdout, "####### average1  = %f\n", average );
 #endif
 
-		for( i=0; i<20; i++ ) for( j=0; j<20; j++ ) 
-			n_distmp[i][j] *= 600.0 / average;
+		if( rescale )
+		{
+			for( i=0; i<20; i++ ) for( j=0; j<20; j++ ) 
+				n_distmp[i][j] *= 600.0 / average;
+		}
+		else
+		{
+			for( i=0; i<20; i++ ) for( j=0; j<20; j++ ) 
+				n_distmp[i][j] *= 600.0;
+		}
 #if TEST
         fprintf( stdout, "after average division : \n" );
         for( i=0; i<20; i++ )
@@ -969,27 +975,27 @@ void constants( int nseq, char **seq )
 
         if( disp )
         {
-            fprintf( stdout, " scoring matrix  \n" );
+            fprintf( stderr, " scoring matrix  \n" );
             for( i=0; i<20; i++ )
             {
-				fprintf( stdout, "%c    ", amino[i] );
+				fprintf( stderr, "%c    ", amino[i] );
                 for( j=0; j<20; j++ )
-                    fprintf( stdout, "%5.0f", n_distmp[i][j] );
-                fprintf( stdout, "\n" );
+                    fprintf( stderr, "%5.0f", n_distmp[i][j] );
+                fprintf( stderr, "\n" );
             }
-			fprintf( stdout, "     " );
+			fprintf( stderr, "     " );
             for( i=0; i<20; i++ )
-				fprintf( stdout, "    %c", amino[i] );
+				fprintf( stderr, "    %c", amino[i] );
 
 			average = 0.0;
         	for( i=0; i<20; i++ ) for( j=0; j<20; j++ )
 				average += n_distmp[i][j] * freq1[i] * freq1[j];
-			fprintf( stdout, "\naverage = %f\n", average );
+			fprintf( stderr, "\naverage = %f\n", average );
 
 			iaverage = 0.0;
         	for( i=0; i<20; i++ )
 				iaverage += n_distmp[i][i] * freq1[i];
-			fprintf( stdout, "itch average = %f, E=%f\n", iaverage, average/iaverage );
+			fprintf( stderr, "itch average = %f, E=%f\n", iaverage, average/iaverage );
 			reporterr(       "parameters: %d, %d, %d\n", penalty, penalty_ex, offset );
 
 			

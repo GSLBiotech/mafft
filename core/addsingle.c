@@ -1368,7 +1368,7 @@ static double treebase( int nseq, int *nlen, char **aseq, int nadd, char *mergeo
 */
 
 
-		if( !nevermemsave && ( constraint != 2  && alg != 'M'  && ( len1 > 30000 || len2 > 30000 ) ) )
+		if( !nevermemsave && ( constraint != 2  && alg != 'M'  && ( len1 > 50000 || len2 > 50000 ) ) )
 		{
 			fprintf( stderr, "\nlen1=%d, len2=%d, Switching to the memsave mode.\n", len1, len2 );
 			alg = 'M';
@@ -1379,12 +1379,23 @@ static double treebase( int nseq, int *nlen, char **aseq, int nadd, char *mergeo
 		}
 
 
+		if( alg == 'M' ) // hoka no thread ga M ni shitakamo shirenainode
+		{
+			if( commonIP ) FreeIntMtx( commonIP );
+			commonIP = NULL;
+			commonAlloc1 = 0;
+			commonAlloc2 = 0;
+		}
+
+
 //		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 );
-		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 && clus1 < 1000 && clus2 < 1000 );
+//		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 && clus1 < 1000 && clus2 < 1000 );
+		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 );
 		else						   ffttry = 0;
 //		ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 && clus1 < 5000 && clus2 < 5000 ); // v6.708
 //		fprintf( stderr, "f=%d, len1/fftlog[m1]=%f, clus1=%d, len2/fftlog[m2]=%f, clus2=%d\n", ffttry, (double)len1/fftlog[m1], clus1, (double)len2/fftlog[m2], clus2 );
 //		fprintf( stderr, "f=%d, clus1=%d, fftlog[m1]=%d, clus2=%d, fftlog[m2]=%d\n", ffttry, clus1, fftlog[m1], clus2, fftlog[m2] );
+
 		if( constraint == 2 )
 		{
 			if( alg == 'M' )
@@ -1397,7 +1408,7 @@ static double treebase( int nseq, int *nlen, char **aseq, int nadd, char *mergeo
 			{
 				imp_match_init_strict( NULL, clus1, clus2, strlen( mseq1[0] ), strlen( mseq2[0] ), mseq1, mseq2, effarr1, effarr2, effarr1_kozo, effarr2_kozo, localhomshrink, NULL, 1, topol[l][0], topol[l][1], NULL, NULL, NULL, -1, 0 );
 				if( rnakozo ) imp_rna( clus1, clus2, mseq1, mseq2, effarr1, effarr2, grouprna1, grouprna2, NULL, NULL, NULL );
-				pscore = A__align( n_dis_consweight_multi, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, constraint, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, -1, -1, NULL, NULL, NULL, 0.0, 0.0 ); // cpmxchild0 tsukaeru??
+				pscore = A__align( n_dis_consweight_multi, penalty, penalty_ex, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, constraint, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, -1, -1, NULL, NULL, NULL, 0.0, 0.0 ); // cpmxchild0 tsukaeru??
 			}
 			else if( alg == 'Q' )
 			{
@@ -1430,7 +1441,7 @@ static double treebase( int nseq, int *nlen, char **aseq, int nadd, char *mergeo
 					pscore = MSalignmm( n_dis_consweight_multi, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, NULL, NULL, NULL, 0.0, 0.0 );
 					break;
 				case( 'A' ):
-					pscore = A__align( n_dis_consweight_multi, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, 0, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, -1, -1, NULL, NULL, NULL, 0.0, 0.0 ); // cpmxchild0 tsukaeru??
+					pscore = A__align( n_dis_consweight_multi, penalty, penalty_ex, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, 0, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, -1, -1, NULL, NULL, NULL, 0.0, 0.0 ); // cpmxchild0 tsukaeru??
 					break;
 				default:
 					ErrorExit( "ERROR IN SOURCE FILE" );
@@ -1598,6 +1609,7 @@ static void	*addsinglethread( void *arg )
 		norg = njob - nadd;
 		njobc = norg+1;
 
+#if 0
 		alnleninnode = AllocateIntVec( norg );
 		addmem = AllocateIntVec( nadd+1 );
 		depc = (Treedep *)calloc( njobc, sizeof( Treedep ) );
@@ -1609,6 +1621,19 @@ static void	*addsinglethread( void *arg )
 		mergeoralign = AllocateCharVec( njob );
 		nogaplenjusttodecideaddhereornot = AllocateIntVec( njobc );
 		tmpseq = calloc( alloclen, sizeof( char ) );
+#else
+		alnleninnode = AllocateIntVec( norg );
+		addmem = AllocateIntVec( nadd+1 );
+		depc = (Treedep *)calloc( njobc, sizeof( Treedep ) );
+		mseq1 = AllocateCharMtx( njobc, 0 );
+		mseq2 = AllocateCharMtx( njobc, 0 );
+		bseq = AllocateCharMtx( njobc, alloclen );
+		namec = AllocateCharMtx( njobc, 0 );
+		nlenc = AllocateIntVec( njobc );
+		mergeoralign = AllocateCharVec( njobc );
+		nogaplenjusttodecideaddhereornot = AllocateIntVec( njobc );
+		tmpseq = calloc( alloclen, sizeof( char ) );
+#endif
 
 		if( allowlongadds ) // hontou ha iranai.
 		{
@@ -1701,7 +1726,10 @@ static void	*addsinglethread( void *arg )
 					pthread_mutex_unlock( targ->mutex_counter );
 					break;
 				}
-				fprintf( stderr, "\r%d / %d (thread %d)                    \r", iadd, nadd, thread_no );
+				if( iadd < 500 )
+					fprintf( stderr, "\rSTEP %d / %d (thread %d)                    \r", iadd, nadd, thread_no );
+				else if( iadd % 100 == 0 )
+					fprintf( stderr, "\nSTEP %d / %d (thread %d)                    \n", iadd, nadd, thread_no );
 				++(*iaddshare);
 				targetseq = seq[norg+iadd];
 				pthread_mutex_unlock( targ->mutex_counter );
@@ -1712,7 +1740,10 @@ static void	*addsinglethread( void *arg )
 				iadd++;
 				if( iadd == nadd ) break;
 				targetseq = seq[norg+iadd];
-				fprintf( stderr, "\r%d / %d                    \r", iadd, nadd );
+				if( iadd < 500 )
+					fprintf( stderr, "\rSTEP %d / %d                    \r", iadd, nadd );
+				else if( iadd % 100 == 0 )
+					fprintf( stderr, "\nSTEP %d / %d                    \n", iadd, nadd );
 			}
 
 			for( i=0; i<norg; i++ ) strcpy( bseq[i], seq[i] );
@@ -1974,7 +2005,8 @@ static void	*addsinglethread( void *arg )
 		if( mseq1 ) free( mseq1 ); mseq1 = NULL;
 		if( mseq2 ) free( mseq2 ); mseq2 = NULL;
 		Falign( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL, NULL, 0, NULL );
-		A__align( NULL, NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
+		Falign_udpari_long( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL );
+		A__align( NULL, 0, 0, NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
 		if( commonIP ) FreeIntMtx( commonIP );
 		commonIP = NULL;
 		commonAlloc1 = commonAlloc2 = 0;
@@ -2846,6 +2878,30 @@ static void smoothing1( int njob, int nadd, int lenfull, char **seq, Blocktoreal
 //	for( i=0; i<lenfull+1; i++ ) fprintf( stderr, "i=%d, nnewres=%d, start=%d, end=%d\n", i, realign[i].nnewres, realign[i].start, realign[i].end );
 }
 	
+static double ratioambiguouscolumn_simple( char **s, int n, int l )
+{
+	int i, j;
+	int nunambiguous;
+	int nambiguous;
+	if( dorp == 'd' )
+		nunambiguous = 4;
+	else
+		nunambiguous = 6;
+
+	nambiguous = 0;
+	for( i=0; i<l; i++ )
+	{
+		for( j=0; j<n; j++ )
+			if( amino_grp[(int)s[j][i]] < nunambiguous )
+				break;
+		if( j == n )
+			nambiguous += 1;
+	}
+
+	reporterr( "nambiguous = %d / %d, ratio=%f\n", nambiguous, l, (double)nambiguous / l );
+	return( (double)nambiguous / l );
+}
+
 int main( int argc, char *argv[] )
 {
 	static int  *nlen;	
@@ -2929,7 +2985,9 @@ int main( int argc, char *argv[] )
 	njobc = norg+1;
 	fprintf( stderr, "norg = %d\n", norg );
 	fprintf( stderr, "njobc = %d\n", njobc );
-	if( norg > 1000 || nadd > 1000 ) use_fft = 0;
+//	if( norg > 1000 || nadd > 1000 ) use_fft = 0;
+//	if( norg > 1000 ) use_fft = 0;
+
 
 	fullseqlen = alloclen = nlenmax*4+1; //chuui!
 	seq = AllocateCharMtx( njob, alloclen );
@@ -3236,6 +3294,17 @@ int main( int argc, char *argv[] )
 	commongappick( norg, seq );
 	lenfull = strlen( seq[0] );
 
+	if( ratioambiguouscolumn_simple( seq, norg, lenfull ) > 0.03 )
+	{
+		fprintf( stderr, "################################################################################\n" );
+		fprintf( stderr, "# \n" );
+		fprintf( stderr, "# The reference MSA has >3%% ambiguous columns.\n" );
+		fprintf( stderr, "# Please prepare a better reference.\n" );
+		fprintf( stderr, "# \n" );
+		fprintf( stderr, "################################################################################\n" );
+		exit( 1 );
+	}
+
 	if( keeplength && mapout )
 	{
 		addbk = (char **)calloc( nadd+1, sizeof( char * ) );
@@ -3390,7 +3459,15 @@ int main( int argc, char *argv[] )
 	}
 	free( dep );
 	FreeFloatMtx( len );
-	if( multidist || tuplesize > 0 ) FreeFloatMtx( nscore );
+	if( multidist || tuplesize > 0 )
+	{
+		FreeFloatHalfMtx( iscore, norg );
+		FreeFloatMtx( nscore );
+	}
+	else
+	{
+		FreeFloatHalfMtx( iscore, njob );
+	}
 
 
 //	for( i=0; i<nadd; i++ ) fprintf( stdout, ">%s (%d) \n%s\n", name[norg+i], norg+i, seq[norg+i] );
@@ -3659,6 +3736,9 @@ int main( int argc, char *argv[] )
 
 
 
+	if( commonIP ) FreeIntMtx( commonIP );
+	commonIP = NULL;
+	A__align( NULL, 0, 0, NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
 	FreeIntMtx( newgaplist_o );
 	FreeIntVec( newgaplist_compact );
 	FreeIntVec( posmap );
@@ -3696,6 +3776,11 @@ int main( int argc, char *argv[] )
 	{
 		if( constraint ) FreeLocalHomTable( localhomtable, njob );
 	}
+
+	FreeCharMtx( seq );
+	FreeCharMtx( name );
+	closeFiles();
+	commonsextet_p( NULL, NULL );
 
 	SHOWVERSION;
 	if( ndeleted > 0 )

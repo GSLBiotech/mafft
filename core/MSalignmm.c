@@ -719,6 +719,7 @@ static double MSalignmm_tanni( double **n_dynamicmtx, int icyc, int jcyc, double
 	lgth1 = ien-ist+1;
 	lgth2 = jen-jst+1;
 
+
 #if STOREWM
 	strncpy( ttt1, seq1[0]+ist, lgth1 ); ttt1[lgth1] = 0;
 	strncpy( ttt2, seq2[0]+jst, lgth2 ); ttt2[lgth2] = 0;
@@ -2124,6 +2125,7 @@ double MSalignmm( double **n_dynamicmtx, char **seq1, char **seq2, double *eff1,
 	nglen1 = seqlen( seq1[0] );
 	nglen2 = seqlen( seq2[0] );
 
+
 #if 0
 	fprintf( stderr, "\n" );
 	for( i=0; i<icyc; i++ ) fprintf( stderr, "seq1[%d] at root = %s\n", i, seq1[i] );
@@ -2133,6 +2135,7 @@ double MSalignmm( double **n_dynamicmtx, char **seq1, char **seq2, double *eff1,
 
 	lgth1 = strlen( seq1[0] );
 	lgth2 = strlen( seq2[0] );
+
 
 	ll1 = ( (int)(lgth1) ) + 100;
 	ll2 = ( (int)(lgth2) ) + 100;

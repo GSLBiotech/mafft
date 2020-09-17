@@ -165,7 +165,7 @@ static void arguments( int argc, char *argv[] )
 //					fprintf( stderr, "nthread = %d\n", nthread );
 					--argc; 
 #ifndef enablemultithread
-					nthread = 0;
+					nthread = 1;
 #endif
 					goto nextoption;
 				case 'I':

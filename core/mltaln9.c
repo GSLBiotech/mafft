@@ -1347,6 +1347,54 @@ static void msaresetnearest( int nseq, Bchain *acpt, double **distfrompt, double
 }
 #endif
 
+static int getdensest( int *m, double *d )
+{
+	int i;
+	double dmax = -100.0;
+	int pmax = -1;
+	for( i=0; m[i]>-1; i++ ) 
+	{
+		if( d[m[i]] > dmax )
+		{
+			dmax = d[m[i]];
+			pmax = m[i];
+		}
+	}
+	return( pmax );
+}
+
+static void setdensity( int nseq, Bchain *acpt, double **eff, double *density, int pos )
+{
+	int j;
+	double tmpdouble;
+//	double **effptpt;
+	Bchain *acptj;
+
+//	printf( "[%d], %f, dist=%d ->", pos, *mindisfrompt, *nearestpt );
+
+//	if( (acpt+pos)->next ) effpt = eff[pos]+(acpt+pos)->next->pos-pos;
+
+	tmpdouble = 0.0;
+//	for( j=pos+1; j<nseq; j++ )
+	for( acptj=(acpt+pos)->next; acptj!=NULL; acptj=acptj->next )
+	{
+		j = acptj->pos;
+		if( eff[pos][j-pos] < 1.0 )
+			tmpdouble += (2.0-eff[pos][j-pos]);
+	}
+//	effptpt = eff;
+//	for( j=0; j<pos; j++ )
+	for( acptj=acpt; (acptj&&acptj->pos!=pos); acptj=acptj->next )
+	{
+		j = acptj->pos;
+		if( eff[j][pos-j] < 1.0 )
+			tmpdouble += (2.0-eff[j][pos-j]);
+	}
+
+	*density = tmpdouble;
+//	printf( "p=%d, d=%f \n", pos, *density );
+}
+
 static void setnearest( int nseq, Bchain *acpt, double **eff, double *mindisfrompt, int *nearestpt, int pos )
 {
 	int j;
@@ -4444,7 +4492,7 @@ static void *calcnearestthread( void *arg )
 	int *neighbors = targ->neighbors;
 #ifdef enablemultithread
 	pthread_mutex_t *mutex = targ->mutex;
-#endif  
+#endif
 	int pos;
 	double tmpdist, mindist;
 	int progress;
@@ -4487,6 +4535,7 @@ static void *calcnearestthread( void *arg )
 #ifdef enablemultithread
 		pthread_mutex_unlock( mutex );
 #endif
+
 		if( (nlim-pos) % 100 == 0 ) 
 		{
 			//progress = ( (unsigned long long)pos * (unsigned long long)nlim - (unsigned long long)pos*((unsigned long long)pos-1.0)*0.5 ) / ( (unsigned long long)nlim * ((unsigned long long)nlim-1.0) *0.5 ) * 100;
@@ -4570,6 +4619,7 @@ static void *recalcpairs4thread( void *arg )// no TLS
 #ifdef enablemultithread
 	pthread_mutex_t *mutex = targ->mutex;
 #endif
+
 	int i, j, m0, m1, m00, m11, n, step, istart, iend, n1, n0, subid;
 	int prevn;
 	char *tmpseq1, *tmpseq2;
@@ -4655,6 +4705,7 @@ static void *recalcpairs4thread( void *arg )// no TLS
 #ifdef enablemultithread
 		pthread_mutex_unlock( mutex );
 #endif
+
 		istart = jobplan[step].start;
 		iend = jobplan[step].end;
 		subid = jobplan[step].subid;
@@ -4808,6 +4859,7 @@ static void calcnearest_para( int njob, double *selfscore, char **bseq, int allo
 	handle = calloc( nthread, sizeof( pthread_t ) );
 	pthread_mutex_init( &mutex, NULL );
 #endif
+
 	for( i=0; i<nthread; i++ )
 	{
 		targ[i].thread_no = i;
@@ -4822,7 +4874,7 @@ static void calcnearest_para( int njob, double *selfscore, char **bseq, int allo
 		targ[i].mutex = &mutex;
 		pthread_create( handle+i, NULL, calcnearestthread, (void *)(targ+i) );
 #else
-    calcnearestthread( (void *)(targ+i) );
+		calcnearestthread( (void *)(targ+i) );
 #endif
 	}
 
@@ -5139,7 +5191,7 @@ exit( 1 );
 		targ[i].mutex = &mutex;
 		pthread_create( handle+i, NULL, recalcpairs4thread, (void *)(targ+i) );
 #else
-    recalcpairs4thread( (void *)(targ+i) );
+		recalcpairs4thread( (void *)(targ+i) );
 #endif
 	}
 
@@ -6075,7 +6127,7 @@ void compacttree_memsaveselectable( int nseq, double **partmtx, int *nearest, do
 	if( result ) free( result );
 }
 
-void fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave( int nseq, double **eff, int ***topol, double **len, char **name, int *nlen, Treedep *dep, int efffree )
+void fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave( int nseq, double **eff, int ***topol, double **len, char **name, int *nlen, Treedep *dep, int efffree, int treeout )
 {
 
 	int i, j, k, miniim, maxiim, minijm, maxijm;
@@ -6101,6 +6153,7 @@ void fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave( int nseq, dou
 	FILE *fp;
 	double (*clusterfuncpt[1])(double,double);
 	char namec;
+	double *density;
 
 
 	sueff1 = 1 - (double)sueff_global;
@@ -6130,6 +6183,7 @@ void fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave( int nseq, dou
 		nametmp = AllocateCharVec( 1000 ); // nagasugi
 //		tree = AllocateCharMtx( njob, njob*600 );
 		tree = AllocateCharMtx( njob, 0 );
+		if( treeout == 2 ) density = AllocateDoubleVec( njob );
 	}
 
 	
@@ -6172,6 +6226,7 @@ void fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave( int nseq, dou
 	ac[nseq-1].next = NULL;
 
 	for( i=0; i<nseq; i++ ) setnearest( nseq, ac, eff, mindisfrom+i, nearest+i, i ); // muscle
+	if( treeout == 2 ) for( i=0; i<nseq; i++ ) setdensity( nseq, ac, eff, density+i, i );
 
 
 	for( i=0; i<nseq; i++ ) tmptmplen[i] = 0.0;
@@ -6431,18 +6486,36 @@ void fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave( int nseq, dou
 #endif
 
 
-#if 0
-        printf(       "\nooSTEP-%03d:\n", k+1 );
-		printf(       "len0 = %f\n", len[k][0] );
-        for( i=0; topol[k][0][i]>-1; i++ ) printf(       " %03d", topol[k][0][i]+1 );
-        printf(       "\n" );
-		printf(       "len1 = %f\n", len[k][1] );
-        for( i=0; topol[k][1][i]>-1; i++ ) printf(       " %03d", topol[k][1][i]+1 );
-        printf(       "\n" );
-#endif
     }
 	fp = fopen( "infile.tree", "w" );
 		fprintf( fp, "%s;\n", treetmp );
+	if( treeout == 2 )
+	{
+		int *mem = calloc( sizeof( int ), nseq );
+		fprintf( fp, "\nDensity:" );
+		for( k=0; k<nseq; k++ ) fprintf( fp, "\nSequence %d, %7.4f", k+1, density[k] );
+	
+		fprintf( fp, "\n\nNode info:" );
+		for( k=0; k<nseq-1; k++ )
+		{
+			if( dep )
+				fprintf( fp, "\nNode %d, Height=%f\n", k+1, dep[k].distfromtip );
+//			fprintf( fp, "len0 = %f\n", len[k][0] );
+			topolorderz( mem, topol, dep, k, 0 );
+//			for( i=0; topol[k][0][i]>-1; i++ ) fprintf( fp, " %03d", topol[k][0][i]+1 );
+			fprintf( fp, "%d:", getdensest( mem, density )+1 );
+			for( i=0; mem[i]>-1; i++ ) fprintf( fp, " %d", mem[i]+1 );
+			fprintf( fp, "\n" );
+	
+			topolorderz( mem, topol, dep, k, 1 );
+//			fprintf( fp, "len1 = %f\n", len[k][1] );
+//			for( i=0; topol[k][1][i]>-1; i++ ) fprintf( fp, " %03d", topol[k][1][i]+1 );
+			fprintf( fp, "%d:", getdensest( mem, density )+1 );
+			for( i=0; mem[i]>-1; i++ ) fprintf( fp, " %d", mem[i]+1 );
+			fprintf( fp, "\n" );
+		}
+		free( mem );
+	}
 	fclose( fp );
 
 	free( tree[0] );
@@ -6455,6 +6528,7 @@ void fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave( int nseq, dou
 	free( (void *)nmemar ); nmemar = NULL;
 	free( mindisfrom );
 	free( nearest );
+	if( treeout == 2 ) free( density );
 }
 
 void fixed_musclesupg_double_realloc_nobk_halfmtx_treeout( int nseq, double **eff, int ***topol, double **len, char **name, int *nlen, Treedep *dep, int efffree )
@@ -10550,86 +10624,6 @@ void commongappick_record( int nseq, char **seq, int *map )
 }
 
 
-void commongappick( int nseq, char **seq )
-{
-	int i, j, count;
-	int len = strlen( seq[0] );
-#if 1
-
-	int *mapfromnewtoold;
-
-	mapfromnewtoold = calloc( len+1, sizeof( int ) );
-
-	for( i=0, count=0; i<=len; i++ ) 
-	{
-		for( j=0; j<nseq; j++ )
-			if( seq[j][i] != '-' ) break;
-		if( j != nseq )
-		{
-			mapfromnewtoold[count++] = i;
-	 	}
-	}
-//	mapfromnewtoold[count] = -1; // iranai
-	for( j=0; j<nseq; j++ )
-	{
-		for( i=0; i<count; i++ )
-		{
-			seq[j][i] = seq[j][mapfromnewtoold[i]];
-		}
-	}
-	free( mapfromnewtoold );
-#else
---------------------------
-
-	int *mapfromoldtonew;
-	int pos;
-
-	mapfromoldtonew = calloc( len+1, sizeof( int ) );
-	for( i=0; i<=len; i++ ) mapfromoldtonew[i] = -1;
-
-	for( i=0, count=0; i<=len; i++ ) 
-	{
-		for( j=0; j<nseq; j++ )
-			if( seq[j][i] != '-' ) break;
-		if( j != nseq )
-		{
-			mapfromoldtonew[i] = count;
-			count++;
-	 	}
-	}
-	for( j=0; j<nseq; j++ )
-	{
-		for( i=0; i<=len; i++ ) 
-		{
-			if( (pos=mapfromoldtonew[i]) != -1 )
-				seq[j][pos] = seq[j][i];
-		}
-	}
-	free( mapfromoldtonew );
---------------------------
-
-	for( i=0, count=0; i<=len; i++ ) 
-	{
-	/*
-		allgap = 1;
-		for( j=0; j<nseq; j++ ) 
-			allgap *= ( seq[j][i] == '-' );
-		if( !allgap )
-	*/
-		for( j=0; j<nseq; j++ )
-			if( seq[j][i] != '-' ) break;
-		if( j != nseq )
-		{
-			for( j=0; j<nseq; j++ )
-			{
-				seq[j][count] = seq[j][i];
-			}
-			count++;
-	 	}
-	}
-
-#endif
-}
 
 #if 0
 void commongaprecord( int nseq, char **seq, char *originallygapped )
@@ -15513,12 +15507,10 @@ void fillimp_file( double **impmtx, double *imp, int clus1, int clus2, int lgth1
 //	char *fn;
 //	int subid, res;
 	void (*movefunc)(char *, char *, LocalHom *, int *, int *, int *, int * );
-#ifdef enablemultithread
-	pthread_t *handle;
-#endif
 	readloopthread_arg_t *targ;
 #ifdef enablemultithread
 	pthread_mutex_t mutex;
+	pthread_t *handle;
 #endif
 	double ***localimpmtx;
 	int nth;
@@ -15664,6 +15656,7 @@ void fillimp_file( double **impmtx, double *imp, int clus1, int clus2, int lgth1
 		nth = MIN(nthreadreadlh,nfiles);
 		subid = 0;
 
+//		reporterr( "nthreadlh=%d, nth=%d\n", nthreadreadlh, nth );
 		if( nth > 1 )
 		{
 			localndone = calloc( sizeof(unsigned long long), nth );
@@ -15697,7 +15690,7 @@ void fillimp_file( double **impmtx, double *imp, int clus1, int clus2, int lgth1
 				targ[i].mutex = &mutex;
 				pthread_create( handle+i, NULL, readloopthread, (void *)(targ+i) );
 #else
-        readloopthread( (void *)(targ+i) );
+				readloopthread( (void *)(targ+i) );
 #endif
 			}
 			else

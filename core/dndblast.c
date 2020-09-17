@@ -1,6 +1,4 @@
 #include "mltaln.h"
-#include <sys/types.h>
-
 #define DEBUG 0
 #define TEST 0
 

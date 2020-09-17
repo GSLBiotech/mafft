@@ -4280,7 +4280,7 @@ fprintf( stderr, "\n" );
 	reporterr( "diff = %f\n\n", (pairscore - wm + *impmatch ) / fpenalty );
 
 #if 1
-	if( ( !trywarp && abs( pairscore - wm +*impmatch ) > 0.01 ) || PFACERROR )
+	if( ( !trywarp && fabs( pairscore - wm +*impmatch ) > 0.01 ) || PFACERROR ) // abs() -> fabs(), 2019/Jan/25
 //	if( abs( pairscore - wm +*impmatch ) > 0.01 )
 #else
 	if( abs( pairscore - wm +*impmatch ) > 0.01 )

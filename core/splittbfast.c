@@ -1050,7 +1050,7 @@ static void pairalign( int nseq, int *nlen, char **seq, int *mem1, int *mem2, do
 				else
 				{
 //					fprintf( stderr, "%d-%d", clus1, clus2 );
-					pscore = A__align( n_dis_consweight_multi, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, 0, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
+					pscore = A__align( n_dis_consweight_multi, penalty, penalty_ex, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, 0, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
 				}
 				break;
 			default:

@@ -7,6 +7,7 @@ static char *comment;
 static char *orderfile;
 static int format;
 static int namelen;
+static int excludedashseq;
 static int extendedalphabet;
 
 static void fillspace( char *seq, int lenmax )
@@ -166,6 +167,7 @@ void setmark( int nlen, int nseq, char **seq, char *mark )
 void arguments( int argc, char *argv[] )
 {
     int c;
+	excludedashseq = 0;
 	namelen = -1;
 	scoremtx = 1;
 	nblosum = 62;
@@ -207,6 +209,9 @@ void arguments( int argc, char *argv[] )
 				case 'f':
 					format = 'f';
 					break;
+				case 'd':
+					excludedashseq = 1;
+					break;
 				case 'y':
 					format = 'y';
 					break;
@@ -233,17 +238,17 @@ void arguments( int argc, char *argv[] )
     }
 }
 
-
 int main( int argc, char *argv[] )
 {
-	static int  *nlen;	
-	static char **name, **seq, *mark;
-	static int *order;
-	int i;
+	static int  *nlen, *onlen;	
+	static char **name, **oname, **seq, **oseq, *mark;
+	static int *order, *oorder;
+	int i, j;
 	FILE *infp;
 	FILE *orderfp;
 	char gett[B];
 	int nlenmin;
+	int nout;
 
 	arguments( argc, argv );
 
@@ -269,7 +274,6 @@ int main( int argc, char *argv[] )
 	name = AllocateCharMtx( njob, B+1 );
     nlen = AllocateIntVec( njob );
 
-
 	if( orderfile )
 	{
 		orderfp = fopen( orderfile, "r" );
@@ -290,6 +294,7 @@ int main( int argc, char *argv[] )
 		for( i=0; i<njob; i++ ) order[i] = i;
 	}
 
+
 	readData_pointer_casepreserve( infp, name, nlen, seq );
 	fclose( infp );
 
@@ -300,23 +305,78 @@ int main( int argc, char *argv[] )
 
 //	initFiles();
 
+	if( excludedashseq )
+	{
+		nout = 0;
+		for( i=0; i<njob; i++ )
+		{
+			if( !strncmp( name[order[i]]+1, "DASH|", 5 ) || strstr( name[order[i]]+1, "_numo_e_DASH|" ) ) continue;
+			nout++;
+		}
+
+		reporterr( "nout=%d\n", nout );
+
+		oseq = calloc( sizeof( char * ), nout );
+		oname = calloc( sizeof( char * ), nout );
+   		onlen = AllocateIntVec( nout );
+   		oorder = AllocateIntVec( nout );
+
+
+		for( i=0,j=0; i<njob; i++ )
+		{
+			if( !strncmp( name[order[i]]+1, "DASH|", 5 ) || strstr( name[order[i]]+1, "_numo_e_DASH|" ) ) continue;
+			oname[j] = name[order[i]];
+			oseq[j] = seq[order[i]];
+			onlen[j] = nlen[order[i]];
+   			oorder[j] = j;
+			j++;
+		}
+		commongappick( nout, oseq );
+	}
+	else
+	{
+		oseq = seq;
+		oname = name;
+   		onlen = nlen;
+   		oorder = order;
+		nout = njob;
+	}
+
+	reporterr( "seq = %p, oseq=%p\n", seq, oseq );
+
 
 
 //	setmark( nlenmax, njob, seq, mark );
-	setmark_clustal( nlenmax, njob, seq, mark );
+	setmark_clustal( nlenmax, nout, oseq, mark );
 
 #if mingw
 	setmode( fileno( stdout ), O_TEXT ); // windows deha saishuu tekina output nomi text mode
 #endif
 
 	if( format == 'f' )
-		writeData_reorder_pointer( stdout, njob, name, nlen, seq, order );
+		writeData_reorder_pointer( stdout, nout, oname, onlen, oseq, oorder );
 	else if( format == 'c' )
-		clustalout_pointer( stdout, njob, nlenmax, seq, name, mark, comment, order, namelen );
+		clustalout_pointer( stdout, nout, nlenmax, oseq, oname, mark, comment, oorder, namelen );
 	else if( format == 'y' )
-		phylipout_pointer( stdout, njob, nlenmax, seq, name, order, namelen );
+		phylipout_pointer( stdout, nout, nlenmax, oseq, oname, oorder, namelen );
 	else
 		fprintf( stderr, "Unknown format\n" );
+
+	FreeCharMtx( seq ); seq = NULL;
+	FreeCharMtx( name ); name = NULL;
+	free( nlen ); nlen = NULL;
+	free( order ); order = NULL;
+
+	if( excludedashseq )
+	{
+		free( oseq ); oseq = NULL;
+		free( oname ); oname = NULL;
+		free( onlen ); onlen = NULL;
+		free( oorder ); oorder = NULL;
+	}
+
+	free( mark ); mark = NULL;
+	freeconstants();
 
 //	SHOWVERSION;
 	return( 0 );

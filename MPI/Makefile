@@ -14,7 +14,7 @@ CFLAGS := -O3
 #CFLAGS =  -O0  -fPIC -pedantic -Wall -std=c99 -g -DMALLOC_CHECK_=3 # for shark, valgrind
 # CFLAGS := -O0 -g -ipo -no-prec-div -xHost -std=c99
 TARGET_ARCH := 
-LDLIBS := -lm -lrt   # -lrt?
+LDLIBS := -lm -lrt -lpthread  # -lrt?
 
 
 ENABLE_MULTITHREAD := -Denablemultithread
@@ -27,7 +27,7 @@ else
 STDF = -std=c99
 endif
 
-CFLAGS := $(ENABLE_MULTITHREAD) $(ENABLE_ATOMIC) $(STDF) $(CFLAGS) -I../core -MMD -MP
+MYCFLAGS := $(ENABLE_MULTITHREAD) $(ENABLE_ATOMIC) $(STDF) $(CFLAGS) -I../core -MMD -MP
 
 OBJDIR := ./obj
 ifeq "$(strip $(OBJDIR))" ""
@@ -71,7 +71,7 @@ mpiscript : mpiscript.tmpl
 $(OBJDIR)/%.o : %.c
 	-@mkdir -p $(OBJDIR)
 	@[ -d $(OBJDIR) ]
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -o $@ -c $<
+	$(CC) $(MYCFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -o $@ -c $<
 
 clean :
 	rm -f $(OBJNODPAIR) $(DEPSNODPAIR) $(PROGS) $(SCRIPTS) *.o *.a *.exe *~

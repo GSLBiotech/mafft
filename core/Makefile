@@ -19,6 +19,10 @@ else
 	# Comment out the above line if your compiler 
 	# does not support "atomic_int".
 
+	#DASH_CLIENT = dash_client
+	# Uncomment the above line to use protein 3D 
+	# structural information.  Go language is required.
+
 	CC = gcc
 	#CC = icc
 	CFLAGS = -O3
@@ -53,10 +57,14 @@ MYCFLAGS = $(MNO_CYGWIN) $(ENABLE_MULTITHREAD) $(ENABLE_ATOMIC) $(STDF) $(CFLAGS
 
 INSTALL = install
 
+STRIP = strip
+#STRIP = true # to disable strip
+
 PROGS = dvtditr dndfast7 dndblast sextet5 mafft-distance pairlocalalign \
 		multi2hat3s pairash addsingle maffttext2hex hex2maffttext \
         splittbfast disttbfast tbfast nodepair mafft-profile f2cl mccaskillwrap contrafoldwrap countlen \
-		seq2regtable regtable2seq score getlag dndpre setcore replaceu restoreu setdirection makedirectionlist version
+		seq2regtable regtable2seq score getlag dndpre setcore replaceu restoreu setdirection makedirectionlist version \
+		$(DASH_CLIENT)
 SOS = libdisttbfast.so
 DLLS = libdisttbfast.dll
 DYLIBS = libdisttbfast.dylib
@@ -157,6 +165,10 @@ all : $(PERLPROGS) $(PROGS) $(SCRIPTS)
 sos : $(SOS)
 dylibs : $(DYLIBS)
 dlls : $(DLLS)
+
+$(DASH_CLIENT): dash_client.go
+	go build dash_client.go
+#	go build --ldflags '-extldflags "-static"' dash_client.go
 
 univscript: univscript.tmpl Makefile
 	sed "s:_PROGS:$(PROGS):" univscript.tmpl  > univscript
@@ -543,7 +555,7 @@ score.$(OBJ) : score.c $(HEADER)
 	$(CC) $(MYCFLAGS) -c score.c
 
 clean :
-	rm -f *.$(OBJ) *.a *.exe *~ $(PERLPROGS) $(PROGS) $(SCRIPTS) $(SOS) $(DYLIBS) $(DLLS) *.gcda *.gcno
+	rm -f *.$(OBJ) *.a *.exe *~ $(PERLPROGS) $(PROGS) $(SCRIPTS) $(SOS) $(DYLIBS) $(DLLS) *.gcda *.gcno $(DASH_CLIENT)
 #	rm -f ../binaries/* ../scripts/*
 
 install : all
@@ -554,7 +566,9 @@ install : all
 	chmod 755 $(SCRIPTS)
 	$(INSTALL) $(SCRIPTS)  $(DESTDIR)$(BINDIR)
 	chmod 755 $(PROGS) ||:     # in MinGW, it's ok if this fails
-	$(INSTALL) -s $(PROGS) $(DESTDIR)$(LIBDIR)
+#	$(INSTALL) -s $(PROGS) $(DESTDIR)$(LIBDIR)
+	$(STRIP) $(PROGS) ||: # may fail for dash_client on mac.
+	$(INSTALL) $(PROGS) $(DESTDIR)$(LIBDIR)
 	$(INSTALL) $(PERLPROGS) $(DESTDIR)$(LIBDIR)
 	$(INSTALL) -m 644 $(MANPAGES) $(DESTDIR)$(LIBDIR)
 

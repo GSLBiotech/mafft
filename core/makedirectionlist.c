@@ -8,7 +8,7 @@
 
 #define END_OF_VEC -1
 
-int nadd;
+//int nadd;
 double thresholdtorev;
 int dodp;
 int addfragment;
@@ -857,6 +857,7 @@ int main( int argc, char *argv[] )
 
 		reporterr( "Step 1/2\n" );
 
+
 		if( !dodp )
 		{
 			if( nadd )
@@ -879,7 +880,6 @@ int main( int argc, char *argv[] )
 				istart = 0;
 			for( i=istart; i<njob; i++ ) 
 			{
-
 				gappick0( tmpseq, seq[i] );
 				strcpy( seq[i], tmpseq );
 				sreverse( revseq, tmpseq );

@@ -81,12 +81,13 @@ int main( int ac, char **av )
 				buf[0] = (unsigned char)c;
 				fgetstilspace( buf+1, fp );
 				//fprintf( stderr, "buf=%s\n", buf );
-				if( strchr( buf, '-' ) )
+				if( strchr( (const char *)buf, '-' ) ) // added cast, 2019/Jan/25
 				{
 					printf( "-" );
 					continue;
 				}
-				res = sscanf( buf, " %x ", &c );
+				//res = sscanf( buf, " %x ", &c );
+				res = sscanf( (const char *)buf, " %x ", &c ); // added cast, 2019/Jan/25
 				if( res == EOF )
 				{
 					//fprintf( stderr, "%s was ignored.\n", buf );

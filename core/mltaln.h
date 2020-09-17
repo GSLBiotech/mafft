@@ -1,7 +1,6 @@
 #define USE_XCED 0
 
-#define _SVID_SOURCE
-#define _BSD_SOURCE
+#define _XOPEN_SOURCE
 
 #if USE_XCED
 #include "config.h"
@@ -15,11 +14,6 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include <string.h>
-
-#ifndef _MSC_VER
-  #include <unistd.h>
-#endif 
-
 #include <math.h>
 #include <ctype.h>
 #include "mtxutl.h"
@@ -31,16 +25,18 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #endif
-
+#ifndef _MSC_VER
+#include <unistd.h>
+#endif
 #if !defined(mingw) && !defined(_MSC_VER)
-  #include <sys/resource.h> // for setstacksize, 2016/Jun
-  #include <sys/shm.h> // shared memory
-  #include <sys/mman.h> // shm_open
+#include <sys/resource.h> // for setstacksize, 2016/Jun
+#include <sys/shm.h> // shared memory
+#include <sys/mman.h> // shm_open
 #endif
 
 
 
-#define VERSION "7.407"
+#define VERSION "7.471"
 #define SHOWVERSION reporterr( "%s (%s) Version " VERSION "\nalg=%c, model=%s, amax=%3.1f\n%d thread(s)\n\n", progName( argv[0] ), (dorp=='d')?"nuc":((nblosum==-2)?"text":"aa"), alg, modelname, specificityconsideration, nthread )
 
 #define FFT_THRESHOLD  80
@@ -324,7 +320,16 @@ typedef struct _pairnum
 	int n1;
 } Pairnum;
 
-
+typedef struct _extanch
+{
+	int i;
+	int j;
+	int starti;
+	int endi;
+	int startj;
+	int endj;
+	int score;
+} ExtAnch;
 
 #include "fft.h"
 #include "dp.h"

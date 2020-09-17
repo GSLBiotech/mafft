@@ -8,6 +8,8 @@
 #define SCOREOUT 0
 #define SKIP 1
 
+#define ITERATIVECYCLE 2
+
 #define END_OF_VEC -1
 
 static int treein;
@@ -26,6 +28,9 @@ static int mapout;
 static int smoothing;
 static double maxdistmtxsize;
 static int nthreadtb;
+static int useexternalanchors;
+static int oneiteration;
+static double maxanchorseparation;
 
 #if 0
 #define PLENFACA 0.0123
@@ -124,6 +129,8 @@ typedef struct _treebasethread_arg
 	char *mergeoralign;
 	double **newdistmtx;
 	int *selfscore;
+	ExtAnch *extanch;
+	int **anchindex;
 	pthread_mutex_t *mutex;
 	pthread_cond_t *treecond;
 } treebasethread_arg_t;
@@ -164,6 +171,8 @@ void arguments( int argc, char *argv[] )
 	calledByXced = 0;
 	devide = 0;
 	use_fft = 0;
+	useexternalanchors = 0;
+	oneiteration = 0;
 	force_fft = 0;
 	fftscore = 1;
 	fftRepeatStop = 0;
@@ -213,6 +222,7 @@ void arguments( int argc, char *argv[] )
 	mapout = 0;
 	smoothing = 0;
 	nwildcard = 0;
+	maxanchorseparation = 1000.0;
 
     while( --argc > 0 && (*++argv)[0] == '-' )
 	{
@@ -309,14 +319,15 @@ void arguments( int argc, char *argv[] )
 				case 't':
 					treeout = 1;
 					break;
+				case '^':
+					treeout = 2;
+					break;
 				case 'T':
 					noalign = 1;
 					break;
-#if 0
 				case 'r':
-					fmodel = -1;
+					oneiteration = 1;
 					break;
-#endif
 				case 'D':
 					dorp = 'd';
 					break;
@@ -329,6 +340,10 @@ void arguments( int argc, char *argv[] )
 				case 'e':
 					fftscore = 0;
 					break;
+				case 'x':
+					maxanchorseparation = myatof( *++argv );
+					--argc; 
+					goto nextoption;
 				case 'H':
 					subalignment = 1;
 					subalignmentoffset = myatoi( *++argv );
@@ -406,6 +421,8 @@ void arguments( int argc, char *argv[] )
 				case 'F':
 					use_fft = 1;
 					break;
+				case 'l':
+					useexternalanchors = 1;
 				case 'G':
 					use_fft = 1;
 					force_fft = 1;
@@ -1332,8 +1349,546 @@ static void *distancematrixthread( void *arg )
 		free( table1 );
 	}
 }
+#endif
+
+static void recountpositions( ExtAnch *pairanch, int n1, int n2, char **seq1, char **seq2 ) // loop no junban kentou
+{
+	int i, j, k, len, pos;
+	int *map;
+
+	len = strlen( seq1[0] )+1;
+	map = calloc( sizeof( int ), len );
+
+	for( k=0; k<n1; k++ )
+	{
+		pos = 0;
+		for( i=0; i<len; i++ )
+		{
+			if( seq1[k][i] != '-' )
+			{
+				map[pos] = i;
+				pos++;
+			}
+		}
+
+		for( j=0; pairanch[j].i>-1; j++ )
+		{
+			if( pairanch[j].i == k ) 
+			{
+//				reporterr( "pairanch[%d].endi: %d->%d\n", j, pairanch[j].endi, map[pairanch[j].endi] );
+				pairanch[j].starti = map[pairanch[j].starti];
+				pairanch[j].endi = map[pairanch[j].endi];
+			}
+		}
+	}
+	free( map );
+
+	len = strlen( seq2[0] )+1;
+	map = calloc( sizeof( int ), len );
+	for( k=0; k<n2; k++ )
+	{
+		pos = 0;
+		for( i=0; i<len; i++ )
+		{
+			if( seq2[k][i] != '-' )
+			{
+				map[pos] = i;
+				pos++;
+			}
+		}
+		for( j=0; pairanch[j].i>-1; j++ )
+		{
+			if( pairanch[j].j == k )
+			{
+//				reporterr( "pairanch[%d].endj: %d->%d\n", j, pairanch[j].endj, map[pairanch[j].endj] );
+				pairanch[j].startj = map[pairanch[j].startj];
+				pairanch[j].endj = map[pairanch[j].endj];
+			}
+		}
+	}
+	free( map );
+}
+
+static int anchidcomp( const void *p, const void *q )
+{
+	if ( ((ExtAnch *)q)->i != ((ExtAnch *)p)->i )
+		return ((ExtAnch *)p)->i - ((ExtAnch *)q)->i;
+	return ((ExtAnch *)p)->j - ((ExtAnch *)q)->j;
+}
+
+static int anchcomp( const void *p, const void *q )
+{
+	if ( ((ExtAnch *)q)->starti != ((ExtAnch *)p)->starti )
+		return ((ExtAnch *)p)->starti - ((ExtAnch *)q)->starti;
+  return (int)((char *)p - (char *)q);
+}
+
+static int anchscorecomp( const void *p, const void *q )
+{
+	if ( ((ExtAnch *)q)->score != ((ExtAnch *)p)->score )
+		return ((ExtAnch *)q)->score - ((ExtAnch *)p)->score;
+  return (int)((char *)q - (char *)p);
+}
 
 
+static void indexanchors( ExtAnch *a, int **idx )
+{
+	int n;
+	for( n=0; a[n].i>-1; n++ )
+		;
+
+	qsort( a, n, sizeof( ExtAnch ), anchidcomp );
+
+
+	for( n=0; a[n].i>-1; n++ )
+	{
+//		reporterr( "%d, %dx%d, %d-%d x %d-%d\n", n, a[n].i, a[n].j, a[n].starti, a[n].endi, a[n].startj, a[n].endj );
+		if( idx[a[n].i][a[n].j] == -1 ) idx[a[n].i][a[n].j] = n;
+	}
+#if 0
+	int m;
+	for( n=0; n<njob; n++ ) for( m=n+1; m<njob; m++ )
+		reporterr( "%dx%d -> %d\n", n, m, idx[n][m] );
+	exit( 1 );
+#endif
+}
+
+
+#if 0
+static void checkanchors_internal( ExtAnch *a )
+{
+	int p, q, r, s;
+	int i, j;
+	int consistent;
+	int m;
+#if 0
+	reporterr( "before sortscore\n" );
+	for( p=0; a[p].i>-1; p++ )
+	{
+		reporterr( "a[%d].starti,j=%d,%d, score=%d\n", p, a[p].starti, a[p].startj, a[p].score );
+	}
+#endif
+
+
+	for( r=0; a[r].i>-1; )
+	{
+		i = a[r].i;
+		j = a[r].j;
+		s = r;
+		for( ; i==a[r].i && j==a[r].j; r++ )
+			;
+//		reporterr( "s=%d, r=%d\n", s, r );
+
+		qsort( a+s, r-s, sizeof( ExtAnch ), anchscorecomp );
+#if 0
+		reporterr( "after sortscore, r=%d\n", r );
+		for( p=s; p<r; p++ )
+		{
+			reporterr( "a[%d].starti,j=%d,%d, score=%d\n", p, a[p].starti, a[p].startj, a[p].score );
+		}
+		exit( 1 );
+#endif
+
+		for( p=s; p<r; p++ ) 
+		{
+			if( a[p].starti == -1 ) continue;
+			consistent = 1;
+			m = 0;
+			for( q=p+1; q<r; q++ )
+			{
+				if( a[q].starti == -1 ) continue;
+#if 0
+				reporterr( "p=%d, q=%d\n", p, q );
+				reporterr( "p: a[%d].starti,j=%d,%d, score=%d\n", p, a[p].starti, a[p].startj, a[p].score );
+				reporterr( "q: a[%d].starti,j=%d,%d, score=%d\n", q, a[q].starti, a[q].startj, a[q].score );
+#endif
+	
+				if( a[p].endi == a[q].endi && a[p].starti == a[q].starti && a[p].endj == a[q].endj && a[p].startj == a[q].startj ) 
+				{
+//					reporterr( "identical\n" );
+//					reporterr( "p: a[%d].regi,regj=%d-%d,%d-%d, score=%d\n", p, a[p].starti, a[p].endi, a[p].startj, a[p].endj, a[p].score );
+//					reporterr( "q: a[%d].regi,regj=%d-%d,%d-%d, score=%d\n", q, a[q].starti, a[q].endi, a[q].startj, a[q].endj, a[q].score );
+					;
+				}
+				else if( a[p].endi < a[q].starti && a[p].endj < a[q].startj ) 
+				{
+//					reporterr( "consistent\n" );
+					;
+				}
+//				else if( a[p].endi == a[q].starti && a[p].endj < a[q].startj && a[q].starti<a[q].endi ) 
+//				{
+//					a[q].starti += 1; // 1 zai overlap
+//				}
+//				else if( a[p].endi < a[q].starti && a[p].endj == a[q].startj && a[q].startj<a[q].endj ) 
+//				{
+//					a[q].startj += 1; // 1 zai overlap
+//				}
+				else if( a[q].endi < a[p].starti && a[q].endj < a[p].startj )
+				{
+//					reporterr( "consistent\n" );
+					;
+				}
+//				else if( a[q].endi == a[p].starti && a[q].endj < a[p].startj && a[q].starti<a[q].endi ) // bug in v7.442
+//				{
+//					a[q].endi -= 1; // 1 zai overlap
+//				}
+//				else if( a[q].endi < a[p].starti && a[q].endj == a[p].startj && a[q].startj<a[q].endj )
+//				{
+//					a[q].endj -= 1; // 1 zai overlap
+//				}
+				else 
+				{
+					consistent = 0;
+					if( a[q].score > m ) m = a[q].score;
+//					reporterr( "INconsistent\n" );
+//					reporterr( "p=%d, q=%d\n", p, q );
+//					reporterr( "p: a[%d].regi,regj=%d-%d,%d-%d, score=%d\n", p, a[p].starti, a[p].endi, a[p].startj, a[p].endj, a[p].score );
+//					reporterr( "q: a[%d].regi,regj=%d-%d,%d-%d, score=%d\n", q, a[q].starti, a[q].endi, a[q].startj, a[q].endj, a[q].score );
+//					a[q].starti = a[q].startj = a[q].startj = a[q].endj = -1;
+//					a[q].score = a[p].score - a[q].score; // ??
+//					a[q].score = ( a[p].score + a[q].score ) / 2; // ??
+					a[q].score = 0;
+				}
+			}
+			if( !consistent )
+//				a[p].score = ( a[p].score + m ) / 2; // >= 0
+				a[p].score -= m; // >= 0
+//				a[p].score = 0;
+		}
+	}
+
+#if 0
+	reporterr( "after filtering\n" );
+	for( p=0; a[p].i>-1; p++ )
+	{
+		reporterr( "a[%d].starti,j=%d,%d, score=%d\n", p, a[p].starti, a[p].startj, a[p].score );
+	}
+	exit( 1 );
+#endif
+}
+#endif
+
+static void checkanchors_strongestfirst( ExtAnch *a, int s, double gapratio1, double gapratio2 )
+{
+	int p, q;
+	double zureij;
+	double nogaplenestimation1;
+	double nogaplenestimation2;
+#if 0
+	reporterr( "before sortscore\n" );
+	for( p=0; a[p].i>-1; p++ )
+	{
+		reporterr( "a[%d].starti,j=%d,%d, score=%d\n", p, a[p].starti, a[p].startj, a[p].score );
+	}
+#endif
+	qsort( a, s, sizeof( ExtAnch ), anchscorecomp );
+
+	nogaplenestimation1 = (double)a[0].starti / (1.0+gapratio1);
+	nogaplenestimation2 = (double)a[0].startj / (1.0+gapratio2);
+	zureij = nogaplenestimation1 - nogaplenestimation2;
+
+	for( p=0; a[p].i>-1; p++ )
+	{
+		if( a[p].starti == -1 ) continue;
+
+#if 0
+		nogaplenestimation1 = (double)a[p].starti / (1.0+gapratio1);
+		nogaplenestimation2 = (double)a[p].startj / (1.0+gapratio2);
+		if( fabs( zureij - ( nogaplenestimation1 - nogaplenestimation2 ) ) > maxanchorseparation )
+		{
+//			reporterr( "warning: long internal gaps in %d-%d, |%5.2f-%5.2f - %5.2f| = %5.2f > %5.2f\n", a[p].i, a[p].j, nogaplenestimation1, nogaplenestimation2, zureij, fabs( zureij - ( nogaplenestimation1, nogaplenestimation2 ) ), maxanchorseparation );
+			a[p].starti = a[p].startj = a[p].startj = a[p].endj = -1;
+			continue;
+		}
+#else
+		int nearest, mindist;
+		double zurei, zurej;
+		if( p )
+		{
+			mindist = 999999999;
+			for( q=0; q<p; q++ )
+			{
+				if( a[q].starti == -1 ) continue;
+				if( abs( a[p].starti - a[q].starti ) < mindist )
+				{
+					nearest = q;
+					mindist = abs( a[p].starti - a[q].starti );
+				}
+			}
+			//reporterr( "nearest=%d\n", nearest );
+			if( a[nearest].starti < a[p].starti )
+			{
+				zurei = (double)( a[p].starti - a[nearest].endi )/(1.0+gapratio1);
+				zurej = (double)( a[p].startj - a[nearest].endj )/(1.0+gapratio2);
+			}
+			else
+			{
+				zurei = (double)( a[nearest].starti - a[p].endi )/(1.0+gapratio1);
+				zurej = (double)( a[nearest].startj - a[p].endj )/(1.0+gapratio2);
+			}
+		}
+		else
+			zurei = zurej = 0.0;
+		if( fabs( zurei - zurej ) > maxanchorseparation )
+//		if( fabs( zurei - zurej ) > maxanchorseparation || zurei > maxanchorseparation || zurej > maxanchorseparation ) // test
+		{
+//			reporterr( "warning: long internal gaps in %d-%d, |%5.2f-%5.2f - %5.2f| = %5.2f > %5.2f\n", a[p].i, a[p].j, nogaplenestimation1, nogaplenestimation2, zureij, fabs( zureij - ( nogaplenestimation1, nogaplenestimation2 ) ), maxanchorseparation );
+			a[p].starti = a[p].startj = a[p].startj = a[p].endj = -1;
+			continue;
+		}
+#endif
+
+//		reporterr( "P score=%d, %d-%d, %d-%d\n", a[p].score, a[p].starti, a[p].endi, a[p].startj, a[p].endj );
+		for( q=p+1; a[q].i>-1; q++ )
+		{
+			if( a[q].starti == -1 ) continue;
+//			reporterr( "Q score=%d, %d-%d, %d-%d\n", a[q].score, a[q].starti, a[q].endi, a[q].startj, a[q].endj );
+
+
+			if( a[p].endi < a[q].starti && a[p].endj < a[q].startj ) 
+			{
+//				reporterr( "consistent\n" );
+				;
+			}
+			else if( a[p].endi == a[q].starti && a[p].endj < a[q].startj && a[q].starti<a[q].endi ) 
+			{
+				a[q].starti += 1; // 1 zai overlap
+			}
+			else if( a[p].endi < a[q].starti && a[p].endj == a[q].startj && a[q].startj<a[q].endj ) 
+			{
+				a[q].startj += 1; // 1 zai overlap
+			}
+			else if( a[q].endi < a[p].starti && a[q].endj < a[p].startj )
+			{
+//				reporterr( "consistent\n" );
+				;
+			}
+			else if( a[q].endi == a[p].starti && a[q].endj < a[p].startj && a[q].starti<a[q].endi ) // bug in v7.442
+			{
+				a[q].endi -= 1; // 1 zai overlap
+			}
+			else if( a[q].endi < a[p].starti && a[q].endj == a[p].startj && a[q].startj<a[q].endj )
+			{
+				a[q].endj -= 1; // 1 zai overlap
+			}
+			else 
+			{
+//				reporterr( "INconsistent\n" );
+				a[q].starti = a[q].startj = a[q].startj = a[q].endj = -1;
+			}
+		}
+	}
+
+	qsort( a, s, sizeof( ExtAnch ), anchcomp );
+#if 0
+	reporterr( "after filtering and sorting\n" );
+	for( p=0; a[p].i>-1; p++ )
+	{
+		reporterr( "a[%d].starti,j=%d,%d, score=%d\n", p, a[p].starti, a[p].startj, a[p].score );
+	}
+#endif
+}
+
+
+static double gapnongapratio( int n, char **s )
+{
+	int i, j, len;
+	char *seq, *pt1, *pt2;
+	double fv, ng;
+
+	len = strlen( s[0] );
+	seq = calloc( len+1, sizeof( char ) );
+
+	fv = 0.0;
+	ng = 0.0;
+	for( i=0; i<n; i++  )
+	{
+		pt1 = s[i];
+		while( *pt1 == '-' ) pt1++;
+		pt2 = seq;
+		while( *pt1 != 0 ) *pt2++ = *pt1++;
+		*pt2 = *pt1; // 0
+		pt1 = pt2-1;
+		while( *pt1 == '-' ) pt1--;
+		*(pt1+1) = 0;	
+//		reporterr( "seq[i]=%s\n", s[i] );
+//		reporterr( "seq=%s\n", seq );
+		len = pt1-seq+1;
+		for( j=0; j<len; j++ )
+			if( seq[j] == '-' ) 
+				fv+=1.0;
+			else
+				ng+=1.0;
+	}
+	free( seq );
+	return( fv/ng );
+}
+
+static void	pickpairanch( ExtAnch **pairanch, ExtAnch *extanch, int **anchindex, int n1, int n2, int *m1, int *m2, char **seq1, char **seq2 ) // loop no junban wo kaeta hou ga iikamo
+{
+	int i, j, k, s;
+	s = 0;
+#if 0
+	reporterr( "m1,m2=\n" );
+	for( i=0; i<n1; i++ ) for( j=0; j<n2; j++ )
+	{
+		reporterr( "%d,%d\n", m1[i], m2[j] );
+	}
+#endif
+	for( i=0; i<n1; i++ ) for( j=0; j<n2; j++ )
+	{
+#if 1
+		if( m1[i] < m2[j] ) 
+		{
+//			reporterr( "%dx%d, %dx%d -> jump to %d\n", i, j, m1[i], m2[j], anchindex[m1[i]][m2[j]] );
+			k = anchindex[m1[i]][m2[j]];
+			while( ( k!=-1 ) && ( extanch[k].i == m1[i] && extanch[k].j == m2[j] ) )
+			{
+				s++;
+				k++;
+			}
+		}
+		else
+		{
+//			reporterr( "%dx%d, %dx%d -> jump to %d\n", j, i, m1[i], m2[j], anchindex[m2[j]][m1[i]] );
+			k = anchindex[m2[j]][m1[i]];
+			while( ( k!=-1 ) && ( extanch[k].i == m2[j] && extanch[k].j == m1[i] ) )
+			{
+				s++;
+				k++;
+			}
+		}
+#else
+		k = 0;
+		while( extanch[k].i > -1 ) // kanari muda
+		{
+			//reporterr( "m1[i],m2[j]=%d,%d ? extanch[k].i,j=%d,%d k=%d\n", m1[i], m2[j], extanch[k].i, extanch[k].j, k );
+			if( ( extanch[k].i == m1[i] && extanch[k].j == m2[j] ) || ( extanch[k].i == m2[j] && extanch[k].j == m1[i] ) ) 
+			{
+				//reporterr( "hit, extanch[k].startj=%d\n", extanch[k].startj );
+				s++;
+			}
+			k++;
+		}
+#endif
+	}
+	*pairanch = calloc( sizeof( ExtAnch ), s+1 );
+
+	s = 0;
+	for( i=0; i<n1; i++ ) for( j=0; j<n2; j++ )
+	{
+#if 1
+		if( m1[i] < m2[j] ) 
+		{
+			k = anchindex[m1[i]][m2[j]];
+			while( ( k!=-1 ) && ( extanch[k].i == m1[i] && extanch[k].j == m2[j] ) )
+			{
+//				if( extanch[k].starti + 1 < extanch[k].endi )
+				{
+					(*pairanch)[s].i = i;
+					(*pairanch)[s].j = j;
+					(*pairanch)[s].starti = extanch[k].starti; // map mae
+					(*pairanch)[s].endi = extanch[k].endi; // map mae
+					(*pairanch)[s].startj = extanch[k].startj; // map mae 
+					(*pairanch)[s].endj = extanch[k].endj; // map mae
+					(*pairanch)[s].score = extanch[k].score;
+					s++;
+				}
+				k++;
+			}
+		}
+		else
+		{
+			k = anchindex[m2[j]][m1[i]];
+			while( ( k!=-1 ) && ( extanch[k].i == m2[j] && extanch[k].j == m1[i] ) )
+			{
+//				if( extanch[k].starti + 1 < extanch[k].endi )
+				{
+					(*pairanch)[s].i = i;
+					(*pairanch)[s].j = j;
+					(*pairanch)[s].starti = extanch[k].startj; // map mae
+					(*pairanch)[s].endi = extanch[k].endj; // map mae
+					(*pairanch)[s].startj = extanch[k].starti; // map mae 
+					(*pairanch)[s].endj = extanch[k].endi; // map mae
+					(*pairanch)[s].score = extanch[k].score;
+					s++;
+				}
+				k++;
+			}
+		}
+#else
+		k = 0;
+		while( extanch[k].i > -1 ) // kanari muda
+		{
+			if( extanch[k].i == m1[i] && extanch[k].j == m2[j] )
+			{
+				(*pairanch)[s].i = i;
+				(*pairanch)[s].j = j;
+				(*pairanch)[s].starti = extanch[k].starti; // map mae
+				(*pairanch)[s].endi = extanch[k].endi; // map mae
+				(*pairanch)[s].startj = extanch[k].startj; // map mae 
+				(*pairanch)[s].endj = extanch[k].endj; // map mae
+				(*pairanch)[s].score = extanch[k].score;
+				s++;
+			}
+			if( extanch[k].j == m1[i] && extanch[k].i == m2[j] )
+			{
+				(*pairanch)[s].i = i;
+				(*pairanch)[s].j = j;
+				(*pairanch)[s].starti = extanch[k].startj; // map mae
+				(*pairanch)[s].endi = extanch[k].endj; // map mae
+				(*pairanch)[s].startj = extanch[k].starti; // map mae 
+				(*pairanch)[s].endj = extanch[k].endi; // map mae
+				(*pairanch)[s].score = extanch[k].score;
+				s++;
+			}
+			k++;
+		}
+#endif
+	}
+	(*pairanch)[s].i = (*pairanch)[s].j = -1;
+
+	recountpositions( *pairanch, n1, n2, seq1, seq2 );
+//	truncateseq_group( *pairanch, seq1, seq2, n1, n2 );
+//	copybackanchors( *pairanch, ddn1, n2, seq1, seq2 ); // tabun dame
+
+#if 0
+	reporterr( "Before check\n" );
+	for( k=0; (*pairanch)[k].i>-1; k++ )
+	{
+		if( (*pairanch)[k].starti!=-1)
+			reporterr( "seq1-%d,seq2-%d %d-%d,%d-%d\n", (*pairanch)[k].i, (*pairanch)[k].j, (*pairanch)[k].starti, (*pairanch)[k].endi, (*pairanch)[k].startj, (*pairanch)[k].endj );
+	}
+#endif
+
+#if 0
+	reporterr( "\ngroup1=\n" );
+	for( i=0; m1[i]>-1; i++ )
+		reporterr( "%d ", m1[i] );
+	reporterr( "\n" );
+	reporterr( "\ngroup2=\n" );
+	for( i=0; m2[i]>-1; i++ )
+		reporterr( "%d ", m2[i] );
+	reporterr( "\n" );
+#endif
+
+	checkanchors_strongestfirst( *pairanch, s, gapnongapratio( n1, seq1 ), gapnongapratio( n2, seq2 ) );
+
+
+//	qsort( *pairanch, s, sizeof( ExtAnch ), anchcomp );
+//	checkanchors_new( *pairanch );
+
+#if 0
+	reporterr( "After check\n" );
+	for( k=0; (*pairanch)[k].i>-1; k++ )
+	{
+		if( (*pairanch)[k].starti!=-1)
+			reporterr( "seq1-%d,seq2-%d %d-%d,%d-%d\n", (*pairanch)[k].i, (*pairanch)[k].j, (*pairanch)[k].starti, (*pairanch)[k].endi, (*pairanch)[k].startj, (*pairanch)[k].endj );
+	}
+#endif
+}
+
+#ifdef enablemultithread
 static void *treebasethread( void *arg )
 {
 	treebasethread_arg_t *targ = (treebasethread_arg_t *)arg;
@@ -1353,6 +1908,8 @@ static void *treebasethread( void *arg )
 	char *mergeoralign = targ->mergeoralign;
 	double **newdistmtx = targ->newdistmtx;
 	int *selfscore = targ->selfscore;
+	ExtAnch *extanch = targ->extanch;
+	int **anchindex = targ->anchindex;
 
 	char **mseq1, **mseq2;
 	char **localcopy;
@@ -1374,6 +1931,7 @@ static void *treebasethread( void *arg )
 	int **localmem = NULL;
 	double **cpmxchild0, **cpmxchild1;
 	double orieff1, orieff2;
+	ExtAnch *pairanch = NULL;
 #if SKIP
 	int **skiptable1 = NULL, **skiptable2 = NULL;
 #endif
@@ -1383,6 +1941,7 @@ static void *treebasethread( void *arg )
 
 
 
+	tscore = 0;
 	mseq1 = AllocateCharMtx( njob, 0 );
 	mseq2 = AllocateCharMtx( njob, 0 );
 	localcopy = calloc( njob, sizeof( char * ) );
@@ -1422,7 +1981,8 @@ static void *treebasethread( void *arg )
 			commonIP = NULL;
 			Falign( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL, NULL, 0, NULL );
 			Falign_udpari_long( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL );
-			A__align( NULL,  NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
+			Falign_givenanchors( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL );
+			A__align( NULL, 0, 0, NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
 			D__align( NULL,  NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0 );
 			G__align11( NULL, NULL, NULL, 0, 0, 0 ); // iru?
 			free( mseq1 );
@@ -1660,12 +2220,24 @@ static void *treebasethread( void *arg )
 
 
 //		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 );
-		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 && clus1 < 1000 && clus2 < 1000);
-		else						   ffttry = 0;
+//		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 && clus1 < 1000 && clus2 < 1000);
+//		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 );
+//		else						   ffttry = 0;
+		ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 );
 //		ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 && clus1 < 5000 && clus2 < 5000); // v6.708
 //		reporterr(       "f=%d, len1/fftlog[m1]=%f, clus1=%d, len2/fftlog[m2]=%f, clus2=%d\n", ffttry, (double)len1/fftlog[m1], clus1, (double)len2/fftlog[m2], clus2 );
+//		reporterr( "fftlog=%d,%d, ffttry=%d\n", fftlog[m1], fftlog[m2], ffttry );
 
-		if( force_fft || ( use_fft && ffttry ) )
+		if( useexternalanchors )
+		{
+//			reporterr( "%%%% %d vs %d\n", m1, m2 );
+			pickpairanch( &pairanch, extanch, anchindex, clus1, clus2, localmem[0], localmem[1], mseq1, mseq2 );
+//			reporterr( "pairanch: %d:%d\n", pairanch[0].starti, pairanch[0].startj );
+			pscore = Falign_givenanchors( pairanch, NULL, NULL, dynamicmtx, mseq1, mseq2, effarr1, effarr2, NULL, NULL, clus1, clus2, *alloclen, fftlog+m1 );
+			free( pairanch );
+			pairanch = NULL;
+		}
+		else if( force_fft || ( use_fft && ffttry ) )
 		{
 			if( l < 500 || l % 100 == 0 ) reporterr(       " f\b\b" );
 			if( alg == 'M' )
@@ -1715,7 +2287,7 @@ static void *treebasethread( void *arg )
 					{
 //						reporterr(       "%d-%d", clus1, clus2 );
 						if( l < 500 || l % 100 == 0 ) if( cpmxchild1 || cpmxchild0 ) reporterr(       " h" );
-						pscore = A__align( dynamicmtx, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, 0, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, -1, -1, cpmxchild0, cpmxchild1, cpmxhist+l, orieff1, orieff2 );
+						pscore = A__align( dynamicmtx, penalty, penalty_ex, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, 0, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, -1, -1, cpmxchild0, cpmxchild1, cpmxhist+l, orieff1, orieff2 );
 					}
 					break;
 				default:
@@ -1834,7 +2406,329 @@ static void *treebasethread( void *arg )
 }
 #endif
 
-static int treebase( int *nlen, char **aseq, int nadd, char *mergeoralign, char **mseq1, char **mseq2, int ***topol, Treedep *dep, int **memhist, double ***cpmxhist, double *effarr, double **newdistmtx, int *selfscore, int *alloclen, int (*callback)(int, int, char*) )
+static int dooneiteration( int *nlen, char **aseq, int nadd, char *mergeoralign, char **mseq1, char **mseq2, int ***topol, Treedep *dep, int **memhist, double ***cpmxhist, double *effarr, double **newdistmtx, int *selfscore, ExtAnch *extanch, int **anchindex, int *alloclen, int (*callback)(int, int, char*) )
+{
+	int l, ll, len1, len2, i, j;
+	int clus1, clus2;
+	double pscore;
+	char *indication1 = NULL, *indication2 = NULL;
+	double *effarr1 = NULL;
+	double *effarr2 = NULL;
+	int *fftlog = NULL; // fixed at 2006/07/26
+//	double dumfl = 0.0;
+	double dumdb = 0.0;
+	int ffttry;
+	int m1, m2;
+	int *alreadyaligned = NULL;
+	double **dynamicmtx = NULL;
+	int **localmem = NULL;
+	double **cpmxchild0, **cpmxchild1;
+	double orieff1, orieff2;
+	double oscore, nscore;
+	ExtAnch *pairanch;
+	char **oseq1, **oseq2;
+#if SKIP
+	int **skiptable1 = NULL, **skiptable2 = NULL;
+#endif
+#if 0
+	int i, j;
+#endif
+
+
+	if( effarr1 == NULL ) 
+	{
+		effarr1 = AllocateDoubleVec( njob );
+		effarr2 = AllocateDoubleVec( njob );
+		indication1 = AllocateCharVec( 150 );
+		indication2 = AllocateCharVec( 150 );
+		fftlog = AllocateIntVec( njob );
+		alreadyaligned = AllocateIntVec( njob );
+		if( specificityconsideration )
+			dynamicmtx = AllocateDoubleMtx( nalphabets, nalphabets );
+		localmem = calloc( sizeof( int * ), 2 );
+	}
+	for( i=0; i<njob-nadd; i++ ) alreadyaligned[i] = 1;
+	for( i=njob-nadd; i<njob; i++ ) alreadyaligned[i] = 0;
+
+	if( callback && callback( 0, 50, "Progressive alignment" ) ) goto chudan_tbfast;
+
+	for( l=0; l<njob; l++ ) fftlog[l] = 1;
+
+#if 0 // chain you
+	localmem[0][0] = -1;
+	localmem[1][0] = -1;
+	clus1 = 1;// chain ni hitsuyou
+#endif
+
+#if 0
+	reporterr(       "##### fftwinsize = %d, fftthreshold = %d\n", fftWinSize, fftThreshold );
+#endif
+
+#if 0
+	for( i=0; i<njob; i++ )
+		reporterr(       "TBFAST effarr[%d] = %f\n", i, effarr[i] );
+#endif
+
+//	for( i=0; i<njob; i++ ) strcpy( aseq[i], seq[i] );
+
+
+//	writePre( njob, name, nlen, aseq, 0 );
+
+	for( ll=0; ll<njob*ITERATIVECYCLE; ll++ )
+	{
+		l = ll % njob;
+		cpmxchild0 = NULL;
+		cpmxchild1 = NULL;
+
+		localmem[0] = calloc( sizeof( int ), 2 );
+		localmem[0][0] = l;
+		localmem[0][1] = -1;
+		clus1 = 1;
+		m1 = localmem[0][0];
+
+		localmem[1] = calloc( sizeof( int ), njob );
+		for( i=0,j=0; i<njob; i++ )
+			if( i != l ) localmem[1][j++] = i;
+		localmem[1][j] = -1;
+		clus2 = njob-1;
+		m2 = localmem[1][0];
+
+//		reporterr(       "\ndistfromtip = %f\n", dep[l].distfromtip );
+		if( specificityconsideration )
+			makedynamicmtx( dynamicmtx, n_dis_consweight_multi, dep[l].distfromtip );
+		else
+			dynamicmtx = n_dis_consweight_multi;
+//		makedynamicmtx( dynamicmtx, n_dis_consweight_multi, ( dep[l].distfromtip - 0.2 ) * 3 );
+
+		len1 = strlen( aseq[m1] );
+		len2 = strlen( aseq[m2] );
+		if( *alloclen < len1 + len2 )
+		{
+			reporterr(       "\nReallocating.." );
+			*alloclen = ( len1 + len2 ) + 1000;
+			ReallocateCharMtx( aseq, njob, *alloclen + 10  ); 
+		}
+
+#if 1 // CHUUI@@@@
+		clus1 = fastconjuction_noname( localmem[0], aseq, mseq1, effarr1, effarr, indication1, 0.0, &orieff1 );
+		clus2 = fastconjuction_noname( localmem[1], aseq, mseq2, effarr2, effarr, indication2, 0.0, &orieff2 );
+#else
+		clus1 = fastconjuction_noname( topol[l][0], aseq, mseq1, effarr1, effarr, indication1, 0.0 );
+		clus2 = fastconjuction_noname( topol[l][1], aseq, mseq2, effarr2, effarr, indication2, 0.0 );
+//		clus1 = fastconjuction_noweight( topol[l][0], aseq, mseq1, effarr1,  indication1 );
+//		clus2 = fastconjuction_noweight( topol[l][1], aseq, mseq2, effarr2,  indication2 );
+#endif
+
+		intergroup_score( mseq1, mseq2, effarr1, effarr2, clus1, clus2, strlen( mseq1[0] ), &oscore );
+
+		oseq1 = AllocateCharMtx( 1, len1+1 );
+		oseq2 = AllocateCharMtx( njob-1, len2+1 );
+		for( i=0; i<clus1; i++ ) strcpy( oseq1[i], mseq1[i] );
+		for( i=0; i<clus2; i++ ) strcpy( oseq2[i], mseq2[i] );
+
+		newgapstr = "-";
+		commongappick( clus2, mseq2 );
+		commongappick( clus1, mseq1 );
+
+		if( l < 500 || l % 100 == 0 ) reporterr(       "\rIteration % 5d / %d ", ll+1, njob*ITERATIVECYCLE );
+		if( callback && callback( 0, 50+50*l/(njob-1), "Progressive alignment" ) ) goto chudan_tbfast;
+#if 0
+		reporterr( "\nclus1=%d, clus2=%d\n", clus1, clus2 );
+		for( i=0; i<clus1; i++ ) reporterr( "effarr1[%d]=%f\n", i, effarr1[i] );
+		for( i=0; i<clus2; i++ ) reporterr( "effarr2[%d]=%f\n", i, effarr2[i] );
+#endif
+
+#if 0
+		reporterr(       "STEP %d /%d\n", l+1, njob-1 );
+		reporterr(       "group1 = %.66s", indication1 );
+		if( strlen( indication1 ) > 66 ) reporterr(       "..." );
+		reporterr(       "\n" );
+		reporterr(       "group2 = %.66s", indication2 );
+		if( strlen( indication2 ) > 66 ) reporterr(       "..." );
+		reporterr(       "\n" );
+#endif
+
+/*
+		reporterr(       "before align all\n" );
+		display( aseq, njob );
+		reporterr(       "\n" );
+		reporterr(       "before align 1 %s \n", indication1 );
+		display( mseq1, clus1 );
+		reporterr(       "\n" );
+		reporterr(       "before align 2 %s \n", indication2 );
+		display( mseq2, clus2 );
+		reporterr(       "\n" );
+*/
+
+		if( !nevermemsave && ( alg != 'M' && ( len1 > 30000 || len2 > 30000  ) ) )
+		{
+			reporterr(       "\nlen1=%d, len2=%d, Switching to the memsave mode\n", len1, len2 );
+			alg = 'M';
+			if( commonIP ) FreeIntMtx( commonIP );
+			commonIP = NULL;
+			commonAlloc1 = 0;
+			commonAlloc2 = 0;
+		}
+
+//		ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 && clus1 < 1000 && clus2 < 1000);
+		ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 );
+//		ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 && clus1 < 5000 && clus2 < 5000); // v6.708
+//		reporterr(       "f=%d, len1/fftlog[m1]=%f, clus1=%d, len2/fftlog[m2]=%f, clus2=%d\n", ffttry, (double)len1/fftlog[m1], clus1, (double)len2/fftlog[m2], clus2 );
+
+		if( useexternalanchors )
+		{
+			pickpairanch( &pairanch, extanch, anchindex, clus1, clus2, localmem[0], localmem[1], mseq1, mseq2 );
+//			reporterr( "pairanch: %d:%d\n", pairanch[0].starti, pairanch[0].startj );
+			pscore = Falign_givenanchors( pairanch, NULL, NULL, dynamicmtx, mseq1, mseq2, effarr1, effarr2, NULL, NULL, clus1, clus2, *alloclen, fftlog+m1 );
+			free( pairanch );
+			pairanch = NULL;
+		}
+		else if( force_fft || ( use_fft && ffttry ) )
+		{
+			if( l < 500 || l % 100 == 0 ) reporterr(       " f\b\b" );
+			if( alg == 'M' )
+			{
+				if( l < 500 || l % 100 == 0 ) reporterr(       "m" );
+				pscore = Falign_udpari_long( NULL, NULL, dynamicmtx, mseq1, mseq2, effarr1, effarr2, NULL, NULL, clus1, clus2, *alloclen, fftlog+m1 );
+			}
+			else
+			{
+				pscore = Falign( NULL, NULL, dynamicmtx, mseq1, mseq2, effarr1, effarr2, NULL, NULL, clus1, clus2, *alloclen, fftlog+m1, NULL, 0, NULL );
+//				reporterr(       "######### mseq1[0] = %s\n", mseq1[0] );
+			}
+		}
+		else
+		{
+			if( l < 500 || l % 100 == 0 ) reporterr(       " d\b\b" );
+			fftlog[m1] = 0;
+			switch( alg )
+			{
+				case( 'a' ):
+					pscore = Aalign( mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen );
+					break;
+				case( 'M' ):
+					if( l < 500 || l % 100 == 0 ) reporterr(       "m" );
+					if( l < 500 || l % 100 == 0 ) if( cpmxchild1 || cpmxchild0 ) reporterr(       " h" );
+//					reporterr(       "%d-%d", clus1, clus2 );
+					pscore = MSalignmm( dynamicmtx, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, cpmxchild0, cpmxchild1, cpmxhist+l, orieff1, orieff2 );
+					break;
+				case( 'd' ):
+					if( 1 && clus1 == 1 && clus2 == 1 )
+					{
+//						reporterr(       "%d-%d", clus1, clus2 );
+						pscore = G__align11( dynamicmtx, mseq1, mseq2, *alloclen, outgap, outgap );
+					}
+					else
+					{
+//						reporterr(       "%d-%d", clus1, clus2 );
+						pscore = D__align_ls( dynamicmtx, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, 0, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap );
+					}
+					break;
+				case( 'A' ):
+					if( clus1 == 1 && clus2 == 1 )
+					{
+//						reporterr(       "%d-%d", clus1, clus2 );
+						pscore = G__align11( dynamicmtx, mseq1, mseq2, *alloclen, outgap, outgap );
+					}
+					else
+					{
+						if( l < 500 || l % 100 == 0 ) if( cpmxchild1 || cpmxchild0 ) reporterr(       " h" );
+//						reporterr(       "\n\n %d - %d (%d x %d) : \n", topol[l][0][0], topol[l][1][0], clus1, clus2 );
+						pscore = A__align( dynamicmtx, penalty, penalty_ex, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, 0, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, localmem[0][0], 1, cpmxchild0, cpmxchild1, cpmxhist+l, orieff1, orieff2 );
+					}
+
+					break;
+				default:
+					ErrorExit( "ERROR IN SOURCE FILE" );
+			}
+		}
+		intergroup_score( mseq1, mseq2, effarr1, effarr2, clus1, clus2, strlen( mseq1[0] ), &nscore );
+#if SCOREOUT
+		reporterr(       "score = %10.2f\n", pscore );
+#endif
+		if( nscore < oscore )
+		{
+			for( i=0; i<clus1; i++ ) strcpy( mseq1[i], oseq1[i] );
+			for( i=0; i<clus2; i++ ) strcpy( mseq2[i], oseq2[i] );
+		}
+		FreeCharMtx( oseq1 );
+		FreeCharMtx( oseq2 );
+
+		nlen[m1] = 0.5 * ( nlen[m1] + nlen[m2] );
+
+//		writePre( njob, name, nlen, aseq, 0 );
+
+		if( disp ) display( aseq, njob );
+//		reporterr(       "\n" );
+
+
+
+#if 0
+		if( localmem[1][0] == 13 ) 
+		{
+			reporterr( "OUTPUT!\n" );
+			for( i=0; i<clus1; i++ ) reporterr( ">g1\n%s\n", mseq1[i] );
+			for( i=0; i<clus2; i++ ) reporterr( ">g2\n%s\n", mseq2[i] );
+			exit( 1 );
+		}
+#endif
+
+//		free( topol[l][0] ); topol[l][0] = NULL;
+//		free( topol[l][1] ); topol[l][1] = NULL;
+//		free( topol[l] ); topol[l] = NULL;
+
+
+//		reporterr(       ">514\n%s\n", aseq[514] );
+		free( localmem[0] );
+		free( localmem[1] );
+
+	}
+
+	Falign( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL, NULL, 0, NULL );
+	Falign_udpari_long( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL );
+	Falign_givenanchors( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL );
+	A__align( NULL, 0, 0, NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
+	D__align( NULL,  NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0 );
+	G__align11( NULL, NULL, NULL, 0, 0, 0 ); // iru?
+	free( effarr1 );
+	free( effarr2 );
+	free( indication1 );
+	free( indication2 );
+	free( fftlog );
+	if( specificityconsideration )
+		FreeDoubleMtx( dynamicmtx );
+	free( alreadyaligned );
+	free( localmem );
+	effarr1 = NULL;
+	return( 0 );
+
+	chudan_tbfast:
+
+	Falign( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL, NULL, 0, NULL );
+	Falign_udpari_long( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL );
+	Falign_givenanchors( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL );
+	A__align( NULL, 0, 0, NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
+	D__align( NULL,  NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0 );
+	G__align11( NULL, NULL, NULL, 0, 0, 0 ); // iru?
+	if( effarr1 ) free( effarr1 ); effarr1 = NULL;
+	if( effarr2 ) free( effarr2 ); effarr2 = NULL;
+	if( indication1 ) free( indication1 ); indication1 = NULL;
+	if( indication2 ) free( indication2 ); indication2 = NULL;
+	if( fftlog ) free( fftlog ); fftlog = NULL;
+	if( alreadyaligned ) free( alreadyaligned ); alreadyaligned = NULL;
+	if( specificityconsideration )
+	{
+		if( dynamicmtx ) FreeDoubleMtx( dynamicmtx ); dynamicmtx = NULL;
+	}
+	if( localmem ) free( localmem ); localmem = NULL;
+#if SKIP
+	if( skiptable1 ) FreeIntMtx( skiptable1 ); skiptable1 = NULL;
+	if( skiptable2 ) FreeIntMtx( skiptable2 ); skiptable2 = NULL;
+#endif
+
+	return( 1 );
+}
+static int treebase( int *nlen, char **aseq, int nadd, char *mergeoralign, char **mseq1, char **mseq2, int ***topol, Treedep *dep, int **memhist, double ***cpmxhist, double *effarr, double **newdistmtx, int *selfscore, ExtAnch *extanch, int **anchindex, int *alloclen, int (*callback)(int, int, char*) )
 {
 	int l, len1, len2, i, m, immin, immax;
 	int len1nocommongap, len2nocommongap;
@@ -1858,6 +2752,7 @@ static int treebase( int *nlen, char **aseq, int nadd, char *mergeoralign, char 
 	int **localmem = NULL;
 	double **cpmxchild0, **cpmxchild1;
 	double orieff1, orieff2;
+	ExtAnch *pairanch;
 #if SKIP
 	int **skiptable1 = NULL, **skiptable2 = NULL;
 #endif
@@ -2142,12 +3037,22 @@ static int treebase( int *nlen, char **aseq, int nadd, char *mergeoralign, char 
 		}
 
 //		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 );
-		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 && clus1 < 1000 && clus2 < 1000);
-		else						   ffttry = 0;
-//		ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 && clus1 < 5000 && clus2 < 5000); // v6.708
+//		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 && clus1 < 1000 && clus2 < 1000);
+//		if( fftlog[m1] && fftlog[m2] ) ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 );
+//		else						   ffttry = 0;
+		ffttry = ( nlen[m1] > clus1 && nlen[m2] > clus2 );
 //		reporterr(       "f=%d, len1/fftlog[m1]=%f, clus1=%d, len2/fftlog[m2]=%f, clus2=%d\n", ffttry, (double)len1/fftlog[m1], clus1, (double)len2/fftlog[m2], clus2 );
+//		reporterr( "fftlog=%d,%d, ffttry=%d\n", fftlog[m1], fftlog[m2], ffttry );
 
-		if( force_fft || ( use_fft && ffttry ) )
+		if( useexternalanchors )
+		{
+			pickpairanch( &pairanch, extanch, anchindex, clus1, clus2, localmem[0], localmem[1], mseq1, mseq2 );
+//			reporterr( "pairanch: %d:%d\n", pairanch[0].starti, pairanch[0].startj );
+			pscore = Falign_givenanchors( pairanch, NULL, NULL, dynamicmtx, mseq1, mseq2, effarr1, effarr2, NULL, NULL, clus1, clus2, *alloclen, fftlog+m1 );
+			free( pairanch );
+			pairanch = NULL;
+		}
+		else if( force_fft || ( use_fft && ffttry ) )
 		{
 			if( l < 500 || l % 100 == 0 ) reporterr(       " f\b\b" );
 			if( alg == 'M' )
@@ -2198,7 +3103,7 @@ static int treebase( int *nlen, char **aseq, int nadd, char *mergeoralign, char 
 					{
 						if( l < 500 || l % 100 == 0 ) if( cpmxchild1 || cpmxchild0 ) reporterr(       " h" );
 //						reporterr(       "\n\n %d - %d (%d x %d) : \n", topol[l][0][0], topol[l][1][0], clus1, clus2 );
-						pscore = A__align( dynamicmtx, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, 0, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, localmem[0][0], 1, cpmxchild0, cpmxchild1, cpmxhist+l, orieff1, orieff2 );
+						pscore = A__align( dynamicmtx, penalty, penalty_ex, mseq1, mseq2, effarr1, effarr2, clus1, clus2, *alloclen, 0, &dumdb, NULL, NULL, NULL, NULL, NULL, 0, NULL, outgap, outgap, localmem[0][0], 1, cpmxchild0, cpmxchild1, cpmxhist+l, orieff1, orieff2 );
 					}
 
 					break;
@@ -2333,6 +3238,16 @@ static int treebase( int *nlen, char **aseq, int nadd, char *mergeoralign, char 
 #endif
 		}
 
+#if 0
+		if( localmem[1][0] == 13 ) 
+		{
+			reporterr( "OUTPUT!\n" );
+			for( i=0; i<clus1; i++ ) reporterr( ">g1\n%s\n", mseq1[i] );
+			for( i=0; i<clus2; i++ ) reporterr( ">g2\n%s\n", mseq2[i] );
+			exit( 1 );
+		}
+#endif
+
 //		free( topol[l][0] ); topol[l][0] = NULL;
 //		free( topol[l][1] ); topol[l][1] = NULL;
 //		free( topol[l] ); topol[l] = NULL;
@@ -2348,7 +3263,8 @@ static int treebase( int *nlen, char **aseq, int nadd, char *mergeoralign, char 
 #endif
 	Falign( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL, NULL, 0, NULL );
 	Falign_udpari_long( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL );
-	A__align( NULL,  NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
+	Falign_givenanchors( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL );
+	A__align( NULL, 0, 0, NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
 	D__align( NULL,  NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0 );
 	G__align11( NULL, NULL, NULL, 0, 0, 0 ); // iru?
 	free( effarr1 );
@@ -2369,7 +3285,8 @@ static int treebase( int *nlen, char **aseq, int nadd, char *mergeoralign, char 
 
 	Falign( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL, NULL, 0, NULL );
 	Falign_udpari_long( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL );
-	A__align( NULL,  NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
+	Falign_givenanchors( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL );
+	A__align( NULL, 0, 0, NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, -1, -1, NULL, NULL, NULL, 0.0, 0.0 );
 	D__align( NULL,  NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0 );
 	G__align11( NULL, NULL, NULL, 0, 0, 0 ); // iru?
 	if( effarr1 ) free( effarr1 ); effarr1 = NULL;
@@ -2561,6 +3478,8 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 	double *mindist = NULL;
 	double **partmtx = NULL;
 // for compacttree
+	ExtAnch *extanch = NULL;
+	int **anchindex = NULL;
 
 
 	if( ngui )
@@ -2672,6 +3591,7 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 	}
 
 
+
 	seq = AllocateCharMtx( njob, nlenmax*1+1 );
 	mseq1 = AllocateCharMtx( njob, 0 );
 	mseq2 = AllocateCharMtx( njob, 0 );
@@ -2704,6 +3624,27 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 	}
 #endif
 
+	if( useexternalanchors ) // nogaplen ha ato de uwagaki sareru kamo
+	{
+		char *tmpseq = calloc( nlenmax+5, sizeof( char ) );
+		for( i=0; i<njob; i++ )
+		{
+//			reporterr( "i=%d, nlenmax=%d, len=%d\n", i, nlenmax, strlen( seq[i] ) );
+			gappick0( tmpseq, seq[i] );
+			nogaplen[i] = strlen( tmpseq );
+		}
+		extanch = calloc( sizeof( ExtAnch ), 1 );
+		extanch[0].i=-1;
+		extanch[0].j=-1;
+		reporterr( "reading anchors\n" );
+		readexternalanchors( &extanch, njob, nogaplen ); // allocate sareru
+		anchindex = AllocateIntMtx( njob, njob ); // sukoshi muda
+		for( i=0; i<njob; i++ ) for( j=0; j<njob; j++ ) anchindex[i][j] = -1;
+		reporterr( "sorting anchors\n" );
+		indexanchors( extanch, anchindex );
+		//checkanchors_internal( extanch ); // comment out -> equivalent to v7.448
+		free( tmpseq );
+	}
 
 	constants( njob, seq );
 
@@ -2752,7 +3693,7 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 		{
 			compacttree = 1;
 			treein = 0;
-			use_fft = 0; // kankeinai?
+//			use_fft = 0; // kankeinai?
 //			maxdistmtxsize = 5 * 1000 * 1000; // 5GB. ato de kahen ni suru.
 //			maxdistmtxsize =  1.0 * 1000 * 1000 * 1000; // 5GB. ato de kahen ni suru.
 		}
@@ -2760,13 +3701,13 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 		{
 			compacttree = 4; // youngest linkage, 3 ha tbfast de tsukaunode ichiou sakeru
 			treein = 0;
-			use_fft = 0; // kankeinai?
+//			use_fft = 0; // kankeinai?
 		}
 		else if( treein == 'S' || treein == 'C' )
 		{
 			compacttree = 2; // 3 ha tbfast de tsukaunode ichiou sakeru
 			treein = 0;
-			use_fft = 0; // kankeinai?
+//			use_fft = 0; // kankeinai?
 		}
 		else if( treein == 'a' )
 		{
@@ -2802,7 +3743,8 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 		nthreadtb = 0;
 	}
 #endif
-	if( njob > 10000 ) nthreadtb = 0; 
+//	if( njob > 10000 ) nthreadtb = 0; 
+	if( njob > 20000 ) nthreadtb = 0; 
 // 2018/Jan.  Hairetsu ga ooi toki
 // 1. topolorder_lessargs no stack ga tarinakunaru
 // 2. localcopy no tame kouritsu warui
@@ -3280,7 +4222,7 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 			else if( treeout )
 			{
 				reporterr(       "Constructing a UPGMA tree (treeout, efffree=%d) ... ", !calcpairdists );
-				fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave( njob, mtx, topol, len, name, nogaplen, dep, !calcpairdists );
+				fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave( njob, mtx, topol, len, name, nogaplen, dep, !calcpairdists, treeout );
 				if( !calcpairdists )
 				{
 					FreeFloatHalfMtx( mtx, njob ); mtx = NULL;
@@ -3761,6 +4703,8 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 				targ[i].alloclenpt = &alloclen;
 				targ[i].fftlog = fftlog;
 				targ[i].mergeoralign = mergeoralign;
+				targ[i].extanch = extanch;
+				targ[i].anchindex = anchindex;
 #if 1 // tsuneni SEPARATELYCALCPAIRDISTS
 				targ[i].newdistmtx = NULL;
 				targ[i].selfscore = NULL;
@@ -3805,7 +4749,7 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 #endif
 			{
 //				if( treebase( keeplength && (iguidetree==nguidetree-1), nlen, bseq, nadd, mergeoralign, mseq1, mseq2, topol, dep, eff, NULL, NULL, deletemap, deletelag, &alloclen, callback ) ) goto chudan;
-				if( treebase( nlen, bseq, nadd, mergeoralign, mseq1, mseq2, topol, dep, memhist, cpmxhist, eff, NULL, NULL, &alloclen, callback ) ) goto chudan;
+				if( treebase( nlen, bseq, nadd, mergeoralign, mseq1, mseq2, topol, dep, memhist, cpmxhist, eff, NULL, NULL, extanch, anchindex, &alloclen, callback ) ) goto chudan;
 			}
 		}
 
@@ -4055,6 +4999,14 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 //		use_getrusage();
 
 	}
+
+
+	if( oneiteration )
+	{
+		reporterr( "Iterative refinement (one vs others)\n" );
+		dooneiteration( nlen, bseq, nadd, mergeoralign, mseq1, mseq2, topol, dep, memhist, cpmxhist, eff, NULL, NULL, extanch, anchindex, &alloclen, callback );
+	}
+
 #if DEBUG
 	reporterr(       "closing trap_g\n" );
 #endif
@@ -4160,6 +5112,11 @@ int disttbfast( int ngui, int lgui, char **namegui, char **seqgui, int argc, cha
 		for( i=0; i<nsubalignments; i++ ) free( subalnpt[i] );
 		free( subalnpt );
 		free( preservegaps );
+	}
+	if( useexternalanchors )
+	{
+		free( extanch );
+		FreeIntMtx( anchindex );
 	}
 
 

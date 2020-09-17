@@ -147,13 +147,14 @@ extern double Lalignmm_hmout( char **seq1, char **seq2, double *eff1, double *ef
 extern double Lalign2m2m_hmout( char **seq1, char **seq2, char **seq1r, char **seq2r, char *dir1, char *dir2, double *eff1, double *eff2, int icyc, int jcyc, int alloclen, char *, char *, char *, char *, double **map );
 extern double MSalign11( char **seq1, char **seq2, int alloclen );
 //extern double rnalocal( char **seq1, char **seq2, double *eff1, double *eff2, int icyc, int jcyc, int alloclen, RNApair **pair );
-extern double A__align( double **scoringmtx, char **seq1, char **seq2, double *eff1, double *eff2, int icyc, int jcyc, int alloclen, int constraint, double *impmatch, char *gs1, char *gs2, char *ge1, char *ge2, int *, int, int *, int headgp, int tailgp, int firstmem, int calledby, double **cpmxchild0, double **cpmxchild1, double ***cpmxresult, double orieff1, double orieff2 );
-extern double A__align_variousdist( int **which, double ***scoringmatrices, double **dummtx, char **seq1, char **seq2, double *eff1, double *eff2, double **eff1s, double **eff2s, int icyc, int jcyc, int alloclen, int constraint, double *impmatch, char *gs1, char *gs2, char *ge1, char *ge2, int *, int, int *, int headgp, int tailgp );
+extern double A__align( double **scoringmtx, int penalty, int penalty_ex, char **seq1, char **seq2, double *eff1, double *eff2, int icyc, int jcyc, int alloclen, int constraint, double *impmatch, char *gs1, char *gs2, char *ge1, char *ge2, int *, int, int *, int headgp, int tailgp, int firstmem, int calledby, double **cpmxchild0, double **cpmxchild1, double ***cpmxresult, double orieff1, double orieff2 );
+extern double A__align_variousdist( int **which, double ***scoringmatrices, double **dummtx, int penalty, int penalty_ex, char **seq1, char **seq2, double *eff1, double *eff2, double **eff1s, double **eff2s, int icyc, int jcyc, int alloclen, int constraint, double *impmatch, char *gs1, char *gs2, char *ge1, char *ge2, int *, int, int *, int headgp, int tailgp );
 extern double A__align_gapmap( char **seq1, char **seq2, double *eff1, double *eff2, int icyc, int jcyc, int alloclen, int constraint, double *impmatch, int *gapmap1, int *gapmap2 );
 extern double translate_and_Calign( char **mseq1, char **mseq2, double *effarr1, double *effarr2, int clus1, int clus2, int alloclen );
 extern double Fgetlag( double **scoringmtx, char  **seq1, char  **seq2, double *eff1, double *eff2, int    clus1, int    clus2, int alloclen );
 extern double Falign( int **whichmtx, double ***scoringmatrices, double **scoreingmtx, char  **seq1, char  **seq2, double *eff1, double *eff2, double **eff1s, double **eff2s, int    clus1, int    clus2, int alloclen, int *fftlog, int *, int, int * );
 extern double Falign_udpari_long( int **whichmtx, double ***scoringmatrices, double **scoringmtx, char  **seq1, char  **seq2, double *eff1, double *eff2, double **eff1s, double **eff2s, int    clus1, int    clus2, int alloclen, int *fftlog );
+extern double Falign_givenanchors( ExtAnch *extanch, int **whichmtx, double ***scoringmatrices, double **scoringmtx, char  **seq1, char  **seq2, double *eff1, double *eff2, double **eff1s, double **eff2s, int    clus1, int    clus2, int alloclen, int *fftlog );
 double Falign_localhom( int **which, double ***scoringmatrices, double **scoreingmtx, char  **seq1, char  **seq2, double *eff1, double *eff2, double **eff1s, double **eff2s, int    clus1, int    clus2, int alloclen, int constraint, double *totalimpmatch, int *gapmap1, int *gapmap2, int *chudanpt, int chudanref, int *chudanres );
 extern double part_imp_match_out_sc( int i1, int j1 );
 extern void part_imp_match_init_strict( double *imp, int clus1, int clus2, int lgth1, int lgth2, char **seq1, char **seq2, double *eff1, double *eff2, double *eff1_kozo, double *eff2_kozo, LocalHom ***localhom, char *swaplist, int forscore, int *memlist1, int *memlist2 );
@@ -177,7 +178,7 @@ extern void topolswap( int s1[], int s2[], int *mpt1, int *mpt2 );
 extern void reduc( double **mtx, int nseq, int im, int jm );
 extern void  nj( int nseq, double **omtx, int ***topol, double **dis );
 extern void JTTmtx( double **rsr, double *freq, unsigned char locamino[0x80], char locgrp[0x80], int isTM );
-extern void BLOSUMmtx( int n, double **matrix, double *freq, unsigned char *amino, char *amino_grp );
+extern void BLOSUMmtx( int n, double **matrix, double *freq, unsigned char *amino, char *amino_grp, int *rescale );
 extern void extendedmtx( double **matrix, double *freq, unsigned char *amino, char *amino_grp );
 extern void putlocalhom2( char *al1, char *al2, LocalHom *localhompt, int off1, int off2, int opt, int overlapaa, char korh );
 extern void putlocalhom_str( char *al1, char *al2, double *equiv, double scale, LocalHom *localhompt, int off1, int off2, int opt, int overlapaa, char korh );
@@ -300,7 +301,7 @@ extern void getdiaminofreq_st( double *freq, int clus, char **seq, double *eff, 
 extern void getdigapfreq_st( double *freq, int clus, char **seq, double *eff, int len );
 extern void st_getGapPattern( Gappat **gpat, int clus, char **seq, double *eff, int len );
 extern void getkyokaigap( char *g, char **s, int pos, int n );
-extern double *loadaamtx( void );
+extern double *loadaamtx( int *rescalept );
 extern double naivepairscore( int nseq1, int nseq2, char **seq1, char **seq2, double *eff1, double *eff2, int penal );
 extern double naivepairscore11( char *seq1, char *seq2, int penal );
 extern double naivepairscore11_dynmtx( double **, char *seq1, char *seq2, int penal );
@@ -325,7 +326,7 @@ extern int check_guidetreefile( int *seed, int *npick, double *limitram );
 extern void createchain( int nseq, int ***topol, double **len, char **name, int *nlen, Treedep *dep, int treeout, int shuffle, int seed );
 //extern void loadtop( int nseq, double **eff, int ***topol, double **len );
 extern void fixed_musclesupg_double_realloc_nobk_halfmtx_treeout( int nseq, double **eff, int ***topol, double **len, char **name, int *nlen, Treedep *, int efffree ); // KESU
-extern void fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave( int nseq, double **eff, int ***topol, double **len, char **name, int *nlen, Treedep *, int efffree );
+extern void fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave( int nseq, double **eff, int ***topol, double **len, char **name, int *nlen, Treedep *, int efffree, int treeout );
 extern void fixed_supg_double_realloc_nobk_halfmtx_treeout_constrained( int nseq, double **eff, int ***topol, double **len, char **name, int *nlen, Treedep *, int ncons, int **constraints, int efffree );
 extern void fixed_musclesupg_double_treeout( int nseq, double **eff, int ***topol, double **len, char **name );
 extern void fixed_supg_double_treeout_constrained( int nseq, double **eff, int ***topol, double **len, char **name, int ncons, int **constraints );
@@ -423,3 +424,4 @@ extern void limitlh( int *uselh, Lennum *in, int size, int limit );
 
 extern double distdp_noalign( char *s1, char *s2, double selfscore1, double selfscore2, int alloclen ); // tbfast.c kara yobareru
 extern void getweightfromname( int n, double *w, char **name );
+extern void readexternalanchors( ExtAnch **extanch, int nseq, int *nogaplen );

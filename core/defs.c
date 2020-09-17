@@ -1,10 +1,10 @@
 #include "mltaln.h"
 #include "dp.h"
 
-int TLS commonAlloc1 = 0;
-int TLS commonAlloc2 = 0;
-int TLS **commonIP = NULL;
-int TLS **commonJP = NULL;
+TLS int commonAlloc1 = 0;
+TLS int commonAlloc2 = 0;
+TLS int **commonIP = NULL;
+TLS int **commonJP = NULL;
 int nthread = 1;
 int nthreadpair = 1;
 int randomseed = 0;
@@ -115,7 +115,7 @@ double consweight_multi = 1.0;
 double consweight_rna = 0.0;
 char RNAscoremtx = 'n';
 
-char TLS *newgapstr = "-";
+TLS char *newgapstr = "-";
 
 int nalphabets = 26;
 int nscoredalphabets = 20;

@@ -1,19 +1,19 @@
 #!/usr/bin/env ruby
 
-localdb = "sp"        
-# database name from which homologues are collected 
-# by locally installed blast. Leave this if you do 
+localdb = "sp"
+# database name from which homologues are collected
+# by locally installed blast. Leave this if you do
 # not use the '-l' option.
 
 mafftpath = "_BINDIR/mafft"   
 # path of mafft. "/usr/local/bin/mafft"
 # if mafft is in your command path, "mafft" is ok.
 
-blastpath = "blastall"   
-# path of blastall. 
+blastpath = "psiblast"
+# path of blastall.
 # if blastall is in your command path, "blastall" is ok.
 
-# mafft-homologs.rb  v. 2.1 aligns sequences together with homologues 
+# mafft-homologs.rb  v. 2.1 aligns sequences together with homologues
 # automatically collected from SwissProt via NCBI BLAST.
 #
 # mafft > 5.58 is required
@@ -23,12 +23,12 @@ blastpath = "blastall"
 # Options:
 #   -a #      the number of collected sequences (default: 50)
 #   -e #      threshold value (default: 1e-10)
-#   -o "xxx"  options for mafft 
+#   -o "xxx"  options for mafft
 #             (default: " --op 1.53 --ep 0.123 --maxiterate 1000")
 #   -l        locally carries out blast searches instead of NCBI blast
 #             (requires locally installed blast and a database)
 #   -f        outputs collected homologues also (default: off)
-#   -w        entire sequences are subjected to BLAST search 
+#   -w        entire sequences are subjected to BLAST search
 #             (default: well-aligned region only)
 
 #require 'getopts'
@@ -37,6 +37,10 @@ require 'tempfile'
 
 if ENV["MAFFT_BLAST"] && ENV["MAFFT_BLAST"] != "" then
 	blastpath = ENV["MAFFT_BLAST"]
+end
+
+if ENV["MAFFT_HOMOLOGS_MAFFT"] && ENV["MAFFT_HOMOLOGS_MAFFT"] != "" then
+	mafftpath = ENV["MAFFT_HOMOLOGS_MAFFT"]
 end
 
 # mktemp
@@ -91,21 +95,24 @@ def readfasta( fp, name, seq )
 	return nseq
 end
 
-nadd = 50
-eval = 1e-10
+nadd = 600
+num_alignments = 600
+num_threads_blast = 4
+eval = 1e-1
 local = 0
 fullout = 0
-entiresearch = 0
+entiresearch = 1
 corewin = 50
 corethr = 0.3
-mafftopt = " --op 1.53 --ep 0.123 --localpair --maxiterate 1000 --reorder "
+#mafftopt = " --op 1.53 --ep 0.123 --localpair --maxiterate 1000 --reorder "
+mafftopt = " --op 1.53 --ep 0.0 --globalpair --maxiterate 1000 --reorder "
 
 
 #if getopts( "s", "f", "w", "l", "h", "e:", "a:", "o:", "c:", "d:" ) == nil ||  ARGV.length == 0 || $OPT_h then
 #	puts "Usage: #{$0} [-h -l -e# -a# -o\"[options for mafft]\"] input_file"
 #	exit
 #end
-params = ARGV.getopts( "sfwlhe:a:o:c:d:" )
+params = ARGV.getopts( "sfwlhe:a:o:c:d:n:N:" )
 
 
 #if $OPT_c then
@@ -114,8 +121,20 @@ if params["c"] != nil then
 end
 
 #if $OPT_d then
+#if params["d"] != nil then
+#	corethr = params["d"].to_f
+#end
+#
 if params["d"] != nil then
-	corethr = params["d"].to_f
+	localdb = params["d"].to_s
+end
+
+if params["n"] != nil then
+	num_alignments = params["n"].to_s
+end
+
+if params["N"] != nil then
+	num_threads_blast = params["N"].to_s
 end
 
 #if $OPT_w
@@ -165,6 +184,10 @@ for i in 0..(nar-1)
 	end
 end
 
+if fullout == 0 then
+	mafftopt += " --excludehomologs "
+end
+
 nseq = 0
 ifp = File.open( "#{temp_if}", 'r' )
 	while ifp.gets
@@ -172,8 +195,8 @@ ifp = File.open( "#{temp_if}", 'r' )
 	end
 ifp.close
 
-if nseq >= 100 then
-	STDERR.puts "The number of input sequences must be <100."
+if nseq >= 10000 then
+	STDERR.puts "The number of input sequences must be <10000."
 	exit
 elsif nseq == 1 then
 	system( "cp #{temp_if}"  + " #{temp_pf}" )
@@ -223,9 +246,9 @@ for i in 0..(nin-2)
 #		puts "#{i.to_s}, #{j.to_s}, #{pid.to_s}"
 		if pid > 0.5 then
 			if slen[i] < slen[j]
-				act[i] = 0 
+				act[i] = 0
 			else
-				act[j] = 0 
+				act[j] = 0
 			end
 		end
 	end
@@ -239,7 +262,11 @@ STDERR.puts "Searching .. \n"
 ids = []
 add = []
 sco = []
+nblast = 0 # ato de tsukau kamo
 for i in 0..(nin-1)
+	singleids = []
+	singleadd = []
+
 	inseq[i].gsub!(/-/,"")
 	afp.puts ">" + orname[i]
 	afp.puts orseq[i]
@@ -250,13 +277,13 @@ for i in 0..(nin-1)
 	STDERR.puts "Query (#{i+1}/#{nin})\n" + inname[i]
 	if act[i] == 0 then
 		STDERR.puts "Skip.\n\n"
-		next 
+		next
 	end
 
 	if local == 0 then
 		command = "lynx -source 'https://www.ncbi.nlm.nih.gov/blast/Blast.cgi?QUERY=" + inseq[i] + "&DATABASE=swissprot&HITLIST_SIZE=" + nadd.to_s + "&FILTER=L&EXPECT='" + eval.to_s + "'&FORMAT_TYPE=TEXT&PROGRAM=blastp&SERVICE=plain&NCBI_GI=on&PAGE=Proteins&CMD=Put' > #{temp_rid}"
 		system command
-	
+
 		ridp = File.open( "#{temp_rid}", 'r' )
 		while ridp.gets
 			break if $_ =~ / RID = (.*)/
@@ -264,9 +291,9 @@ for i in 0..(nin-1)
 		ridp.close
 		rid = $1.strip
 		STDERR.puts "Submitted to NCBI. rid = " + rid
-	
+
 		STDERR.printf "Waiting "
-		while 1 
+		while 1
 			STDERR.printf "."
 			sleep 10
 			command = "lynx -source 'https://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RID=" + rid + "&DESCRIPTIONS=500&ALIGNMENTS=" + nadd.to_s + "&ALIGNMENT_TYPE=Pairwise&OVERVIEW=no&CMD=Get&FORMAT_TYPE=XML' > #{temp_res}"
@@ -296,66 +323,135 @@ for i in 0..(nin-1)
 			qfp.puts "> "
 			qfp.puts inseq[i]
 		qfp.close
-		command = blastpath + "  -p blastp  -e #{eval} -b 1000 -m 7 -i #{temp_qf} -d #{localdb} > #{temp_res}"
+		command = blastpath + " -num_iterations 2 -num_threads #{num_threads_blast} -evalue  #{eval} -num_alignments #{num_alignments} -outfmt 5 -query #{temp_qf} -db #{localdb} > #{temp_res}"
 		system command
-		resp = File.open( "#{temp_res}", 'r' )
+#		system "cp #{temp_res} _res"
 	end
 	STDERR.puts " Done.\n\n"
 
 	resp = File.open( "#{temp_res}", 'r' )
-	while 1
-		while resp.gets
-			break if $_ =~ /<Hit_id>(.*)<\/Hit_id>/ || $_ =~ /(<Iteration_stat>)/
-		end
-		id = $1
-		break if $_ =~ /<Iteration_stat>/
-#		p id
-		while resp.gets
-			break if $_ =~ /<Hsp_bit-score>(.*)<\/Hsp_bit-score>/
-		end
-		score = $1.to_f
-#		p score
+	hitnum = 0
+	lasteval = "nohit"
 
-		known = ids.index( id )
-		if known != nil then
-			if sco[known] >= score then
-				next
-			else
-				ids.delete_at( known )
-				add.delete_at( known )
-				sco.delete_at( known )
-			end
-		end
-		while resp.gets
-			break if $_ =~ /<Hsp_hseq>(.*)<\/Hsp_hseq>/
-		end
-#		break if $1 == nil
-		target = $1.sub( /-/, "" ).sub( /U/, "X" )
-#		p target
-#		STDERR.puts "adding 1 seq"
-		ids.push( id )
-		sco.push( score )
-		add.push( target )
+	while resp.gets
+		break if $_ =~ /<Iteration_iter-num>2<\/Iteration_iter-num>/
 	end
-	resp.close
-end
 
-n = ids.length
+	if $_ == nil then
+		STDERR.puts "no hit"
+	else
+		while 1
+			while resp.gets
+				break if $_ =~ /<Hit_id>(.*)<\/Hit_id>/ || $_ =~ /(<Iteration_stat>)/
+			end
+			id = $1
+			break if $_ =~ /<Iteration_stat>/
+	#		p id
 
-outnum = 0
-while n > 0 && outnum < nadd
-	m = rand( n )
-	afp.puts ">_addedbymaffte_" + ids[m]
-	afp.puts add[m]
-	ids.delete_at( m )
-	add.delete_at( m )
-	n -= 1
-	outnum += 1
+			starthit = 9999999
+			endhit = -1
+			startquery = 9999999
+			endquery = -1
+			target = ""
+			score = 0.0
+
+			while line = resp.gets
+				if line =~ /<Hsp_hit-from>(.*)<\/Hsp_hit-from>/
+					starthitcand=$1.to_i
+				elsif line =~ /<Hsp_hit-to>(.*)<\/Hsp_hit-to>/
+					endhitcand=$1.to_i
+				elsif line =~ /<Hsp_query-from>(.*)<\/Hsp_query-from>/
+					startquerycand=$1.to_i
+				elsif line =~ /<Hsp_query-to>(.*)<\/Hsp_query-to>/
+					endquerycand=$1.to_i
+				elsif $_ =~ /<Hsp_hseq>(.*)<\/Hsp_hseq>/
+					targetcand = $1.sub( /-/, "" ).sub( /U/, "X" )
+				elsif line =~ /<Hsp_bit-score>(.*)<\/Hsp_bit-score>/
+					scorecand=$1.to_f
+				elsif line =~ /<Hsp_evalue>(.*)<\/Hsp_evalue>/
+					evalcand=$1.to_s
+				elsif line =~ /<\/Hsp>/
+					if endhit == -1 then
+						starthit = starthitcand
+						endhit= endhitcand
+						startquery = startquerycand
+						endquery= endquerycand
+						target = targetcand
+						score = scorecand
+						lasteval = evalcand
+					else
+	#					if endhit <=   endhitcand && endquery <=   endquerycand  then
+						if endhit <= starthitcand && endquery <= startquerycand  then
+							endhit = endhitcand
+							endquery = endquerycand
+							target = target + "XX" + targetcand
+							score = score + scorecand
+						end
+	#					if starthitcand <= starthit && startquerycand <= startquery  then
+						if   endhitcand <= starthit &&   endquerycand <= startquery  then
+							starthit = starthitcand
+							startquery = startquerycand
+							target = targetcand + "XX" + target
+							score = score + scorecand
+						end
+					end
+				elsif line =~ /<\/Hit>/
+					hitnum = hitnum + 1
+					break;
+				end
+			end
+
+			singleids.push( id )
+			singleadd.push( target )
+
+			known = ids.index( id )
+			if known != nil then
+				if sco[known] >= score then
+					next
+				else
+					ids.delete_at( known )
+					add.delete_at( known )
+					sco.delete_at( known )
+				end
+			end
+			ids.push( id )
+			sco.push( score )
+			add.push( target )
+
+		end
+		resp.close
+	end
+
+	n = singleids.length
+	outnum = 0
+
+	totalprob = 0
+	prob = []
+	for m in 0..(n-1)
+#		prob[m] = 1.0 / population[eclass[m]]
+		prob[m] = 1.0
+		totalprob += prob[m]
+	end
+#	puts ""
+	for m in 0..(n-1)
+		prob[m] /= (totalprob)
+		prob[m] *= (nadd.to_f / nin.to_f)
+		prob[m] = 1 if prob[m] > 1
+	end
+
+
+	for m in 0..(n-1)
+		if rand( 1000000 ).to_f/1000000 < prob[m] then
+#			STDERR.puts "hit in " + m.to_s
+			afp.puts ">_addedbymaffte_" + singleids[m]
+			afp.puts singleadd[m]
+		end
+	end
 end
 afp.close
 
-STDERR.puts "Performing alignment .. "
-system( mafftpath + mafftopt + " #{temp_af} > #{temp_bf}" )
+STDERR.puts "Aligning .. "
+system( mafftpath + mafftopt + "#{temp_af} > #{temp_bf}" )
 STDERR.puts "done."
 
 bfp = File.open( "#{temp_bf}", 'r' )
@@ -402,6 +498,7 @@ end
 
 
 system( "rm -rf #{temp_if} #{temp_vf} #{temp_af} #{temp_bf} #{temp_pf} #{temp_qf} #{temp_res} #{temp_rid}" )
+#system( "cp #{temp_if} #{temp_vf} #{temp_af} #{temp_bf} #{temp_pf} #{temp_qf} #{temp_res} #{temp_rid} ." )
 if File.exist?( "#{temp_af}.tree" ) then
 	system( "sed 's/_addedbymaffte_/_ho_/'  #{temp_af}.tree > #{ARGV[0].to_s}.tree" )
 	system( "rm #{temp_af}.tree" )
